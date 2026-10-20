@@ -1,0 +1,130 @@
+{
+    "id": "italiana",
+    "order": 30,
+    "name": "Italiana",
+    "tagline": "Lingua, valuta e moduli per il mercato italiano",
+    "description": "Mage-OS configurato per l'Italia: lingua it_IT, euro, fuso Europe/Rome, paese predefinito IT, pacchetto lingua e i moduli Threecommerce a scelta.",
+    "highlights": [
+        "Pacchetto lingua italiano",
+        "EUR, Europe/Rome, paese IT, kg e lunedì come primo giorno",
+        "Moduli Threecommerce selezionabili"
+    ],
+    "defaults": {
+        "language": "it_IT",
+        "currency": "EUR",
+        "timezone": "Europe/Rome"
+    },
+    "repositories": [
+        {
+            "id": "threecommerce",
+            "name": "Repository Threecommerce",
+            "url": "https://repo.threecommerce.it/",
+            "host": "repo.threecommerce.it"
+        }
+    ],
+    "packages": [
+        {
+            "name": "threecommerce/m2-language-it-it",
+            "constraint": "^1.1",
+            "repository": "threecommerce",
+            "required": true,
+            "label": "Pacchetto lingua italiano (it_IT)",
+            "description": "Traduzioni di storefront e admin."
+        },
+        {
+            "name": "threecommerce/m2-italianinvoice",
+            "constraint": "^1.1",
+            "repository": "threecommerce",
+            "default": true,
+            "label": "Italian Invoice",
+            "description": "Dati fiscali italiani per la fatturazione."
+        },
+        {
+            "name": "threecommerce/m2-cookie-banner",
+            "constraint": "^1.0",
+            "repository": "threecommerce",
+            "default": true,
+            "label": "Cookie banner GDPR",
+            "description": "Consenso cookie con blocco preventivo degli script."
+        },
+        {
+            "name": "threecommerce/m2-newsleter-pro",
+            "constraint": "^1.1",
+            "repository": "threecommerce",
+            "label": "Newsletter Pro",
+            "description": "Iscrizione con nome, cognome e consenso GDPR esplicito."
+        },
+        {
+            "name": "threecommerce/m2-banca-sella",
+            "constraint": "^1.6",
+            "repository": "threecommerce",
+            "label": "Banca Sella / Axerve",
+            "description": "Gateway di pagamento Banca Sella (GestPay)."
+        },
+        {
+            "name": "threecommerce/m2-fatt24",
+            "constraint": "^1.2",
+            "repository": "threecommerce",
+            "label": "Fattura24",
+            "description": "Ordini, ricevute e fatture elettroniche con Fattura24."
+        },
+        {
+            "name": "threecommerce/m2-poste-delivery",
+            "constraint": "^1.0",
+            "repository": "threecommerce",
+            "label": "Poste Delivery Business",
+            "description": "Metodo di spedizione, etichetta e tracking."
+        },
+        {
+            "name": "threecommerce/m2-shipping-carriers",
+            "constraint": "^1.0",
+            "repository": "threecommerce",
+            "label": "Shipping Carriers",
+            "description": "Elenco corrieri con link di tracking."
+        },
+        {
+            "name": "threecommerce/m2-storelocator",
+            "constraint": "^1.1",
+            "repository": "threecommerce",
+            "label": "Store Locator",
+            "description": "Elenco negozi con mappa e orari."
+        },
+        {
+            "name": "threecommerce/m2-free-shipping-bar",
+            "constraint": "^1.1",
+            "repository": "threecommerce",
+            "label": "Free Shipping Bar",
+            "description": "Barra di avanzamento verso la spedizione gratuita."
+        },
+        {
+            "name": "threecommerce/m2-ga4",
+            "constraint": "^1.0",
+            "repository": "threecommerce",
+            "label": "GA4 dataLayer",
+            "description": "Eventi ecommerce GA4 per Google Tag Manager."
+        },
+        {
+            "name": "threecommerce/m2-seo",
+            "constraint": "^2.1",
+            "repository": "threecommerce",
+            "label": "SEO",
+            "description": "Strumenti SEO."
+        },
+        {
+            "name": "threecommerce/m2-reports",
+            "constraint": "^1.9",
+            "repository": "threecommerce",
+            "label": "Report admin extra",
+            "description": "Margine prodotti, analisi RFM e altri report."
+        }
+    ],
+    "config": {
+        "general/country/default": "IT",
+        "general/store_information/country_id": "IT",
+        "shipping/origin/country_id": "IT",
+        "tax/defaults/country": "IT",
+        "general/locale/weight_unit": "kgs",
+        "general/locale/firstday": "1"
+    },
+    "replace": []
+}
