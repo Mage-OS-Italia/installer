@@ -6,7 +6,7 @@ require __DIR__ . '/lib/catalog.php';
 require __DIR__ . '/lib/requirements.php';
 require __DIR__ . '/lib/jobs.php';
 
-session_name('mageos_installer');
+session_name('magento_installer');
 session_set_cookie_params(['httponly' => true, 'samesite' => 'Strict']);
 session_start();
 if (empty($_SESSION['csrf'])) {
@@ -67,16 +67,17 @@ if ($action !== '') {
         json_out(['error' => 'Sessione scaduta: ricarica la pagina.'], 403);
     }
     if ($locked && $action !== 'remove' && $action !== 'status') {
-        json_out(['error' => 'Installer bloccato: Mage-OS risulta già installato.'], 423);
+        json_out(['error' => 'Installer bloccato: Magento risulta già installato.'], 423);
     }
     $in = $post ? request_json() : [];
 
     switch ($action) {
         case 'bootstrap':
-            $v = mage_versions();
+            $v = magento_versions();
             json_out([
                 'versions' => $v['versions'], 'versions_source' => $v['source'],
                 'distros' => array_values(distros()),
+                'mageos' => mageos_modules(),
                 'locale' => locale_options(),
                 'server' => server_info(),
                 'app' => ['name' => APP_NAME, 'version' => APP_VERSION],
@@ -146,7 +147,7 @@ $asset = fn(string $f): string => 'assets/' . $f . '?v=' . filemtime(__DIR__ . '
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<title>Mage-OS Installer</title>
+<title>Magento Installer</title>
 <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="<?= h($asset('app.css')) ?>">
 </head>
@@ -155,9 +156,9 @@ $asset = fn(string $f): string => 'assets/' . $f . '?v=' . filemtime(__DIR__ . '
 <?php if ($locked): ?>
 <main class="gate">
   <div class="card gate-card">
-    <img src="assets/logo.svg" alt="Mage-OS">
+    <img src="assets/logo.svg" alt="Magento Installer">
     <h1>Installer bloccato</h1>
-    <p>Mage-OS è già stato installato con questo installer. Per sicurezza non può essere rieseguito.</p>
+    <p>Magento è già stato installato con questo installer. Per sicurezza non può essere rieseguito.</p>
     <p class="muted">Per ripartire elimina il file <code>.installed</code> nella cartella dell'installer, oppure rimuovi l'installer.</p>
     <button class="btn danger" id="remove-btn">Rimuovi installer</button>
   </div>
@@ -172,7 +173,7 @@ document.getElementById('remove-btn').onclick = async () => {
 <?php elseif (!$authorized): ?>
 <main class="gate">
   <div class="card gate-card">
-    <img src="assets/logo.svg" alt="Mage-OS">
+    <img src="assets/logo.svg" alt="Magento Installer">
     <h1>Accesso protetto</h1>
     <p>Questo installer è raggiunto da una rete pubblica. Per continuare inserisci il token di accesso.</p>
     <p class="muted">Lo trovi sul server nel file:<br><code><?= h(token_file()) ?></code></p>

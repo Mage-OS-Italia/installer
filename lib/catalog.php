@@ -1,15 +1,18 @@
 <?php
 declare(strict_types=1);
 
-/** Estensioni richieste comunque da Magento/Mage-OS, usate se il repository non è raggiungibile. */
+/** Estensioni richieste comunque da Magento, usate se il repository non è raggiungibile. */
 const FALLBACK_EXTENSIONS = ['bcmath', 'ctype', 'curl', 'dom', 'gd', 'hash', 'iconv', 'intl', 'mbstring', 'openssl', 'pdo_mysql', 'simplexml', 'soap', 'sodium', 'xsl', 'zip'];
 
+/** Prima versione di Magento proposta: le precedenti non girano sui PHP ancora supportati. */
+const MAGENTO_MIN_VERSION = '2.4.6';
+
 /**
- * Versioni di Mage-OS con i relativi requisiti PHP/estensioni, lette dai metadati di
- * mage-os/product-community-edition (cache 1 ora). Se il repository non risponde si usa
- * l'ultima copia in cache o, in mancanza, un elenco minimo.
+ * Versioni stabili di Magento Open Source (2.4.x e relative patch -pN) con i requisiti PHP/estensioni,
+ * lette dai metadati di magento/product-community-edition (cache 1 ora). Se il repository non risponde
+ * si usa l'ultima copia in cache o, in mancanza, un elenco minimo.
  */
-function mage_versions(bool $refresh = false): array
+function magento_versions(bool $refresh = false): array
 {
     $cache = app_tmp('cache') . '/versions.json';
     if (!$refresh && is_file($cache) && filemtime($cache) > time() - 3600) {
@@ -19,11 +22,11 @@ function mage_versions(bool $refresh = false): array
         }
     }
 
-    $res = http_get(MAGEOS_REPO . 'p2/mage-os/product-community-edition.json', 10);
+    $res = http_get(MAGENTO_REPO . 'p2/magento/product-community-edition.json', 10);
     $versions = [];
     if ($res['ok'] && $res['code'] === 200) {
         $json = json_decode($res['body'], true);
-        $list = $json['packages']['mage-os/product-community-edition'] ?? [];
+        $list = $json['packages']['magento/product-community-edition'] ?? [];
         $prev = [];
         foreach ($list as $entry) {
             // Metadati "minified": ogni voce eredita i campi della precedente.
@@ -35,7 +38,8 @@ function mage_versions(bool $refresh = false): array
                 }
             }
             $v = (string)($prev['version'] ?? '');
-            if (!preg_match('/^\d+\.\d+\.\d+$/', $v)) {
+            // Solo release e patch ufficiali (2.4.8, 2.4.8-p3): niente alpha, beta, RC.
+            if (!preg_match('/^\d+\.\d+\.\d+(-p\d+)?$/', $v) || version_compare($v, MAGENTO_MIN_VERSION, '<')) {
                 continue;
             }
             $req = $prev['require'] ?? [];
@@ -67,13 +71,13 @@ function mage_versions(bool $refresh = false): array
         }
     }
     return ['source' => 'fallback', 'versions' => [[
-        'version' => '3.6.0', 'php' => '~8.3.0||~8.4.0||~8.5.0', 'extensions' => FALLBACK_EXTENSIONS, 'time' => null,
+        'version' => '2.4.8-p5', 'php' => '~8.2.0||~8.3.0||~8.4.0', 'extensions' => FALLBACK_EXTENSIONS, 'time' => null,
     ]]];
 }
 
 function find_version(string $v): ?array
 {
-    foreach (mage_versions()['versions'] as $row) {
+    foreach (magento_versions()['versions'] as $row) {
         if ($row['version'] === $v) {
             return $row;
         }
@@ -106,17 +110,30 @@ function distros(): array
     return $out;
 }
 
-/** Pacchetti dei dati di esempio, tutti alla stessa versione della release scelta. */
-function sample_data_packages(string $version): array
+/** Pacchetti dei dati di esempio: hanno una numerazione propria, quindi composer sceglie l'ultima compatibile. */
+function sample_data_packages(): array
 {
     $mods = ['bundle', 'catalog-rule', 'catalog', 'cms', 'configurable', 'customer', 'downloadable', 'grouped-product', 'msrp',
         'offline-shipping', 'product-links', 'review', 'sales-rule', 'sales', 'swatches', 'tax', 'theme', 'widget', 'wishlist'];
     $pkgs = [];
     foreach ($mods as $m) {
-        $pkgs[] = "mage-os/module-$m-sample-data:$version";
+        $pkgs[] = "magento/module-$m-sample-data:*";
     }
-    $pkgs[] = "mage-os/sample-data-media:$version";
+    $pkgs[] = 'magento/sample-data-media:*';
     return $pkgs;
+}
+
+/** Moduli Mage-OS opzionali (catalog/mageos.json), selezionabili con qualsiasi distro. */
+function mageos_modules(): array
+{
+    $list = json_decode((string)@file_get_contents(APP_ROOT . '/catalog/mageos.json'), true);
+    $out = [];
+    foreach (is_array($list) ? $list : [] as $m) {
+        if (is_array($m) && preg_match('#^mage-os/[a-z0-9_.-]+$#', (string)($m['name'] ?? '')) && !empty($m['constraint'])) {
+            $out[] = $m;
+        }
+    }
+    return $out;
 }
 
 /** Lingue, valute e fusi orari proposti dal form. */

@@ -23,7 +23,7 @@ function validate_install(array $in): array
 
     $version = find_version($s('version'));
     if (!$version) {
-        $err[] = 'Versione di Mage-OS non valida.';
+        $err[] = 'Versione di Magento non valida.';
     }
     $distros = distros();
     $distro = $distros[$s('distro')] ?? null;
@@ -112,10 +112,11 @@ function validate_install(array $in): array
         $err[] = 'Modalità di deploy non valida.';
     }
 
-    // Pacchetti: solo quelli definiti dalla distro.
+    // Pacchetti: solo quelli definiti dalla distro o nel catalogo dei moduli Mage-OS.
     $packages = [];
     $repos = [];
     $selected = array_flip(array_map('strval', (array)($in['packages'] ?? [])));
+    $mageos = array_flip(array_map('strval', (array)($in['mageos'] ?? [])));
     if ($distro) {
         $byRepo = [];
         foreach ($distro['repositories'] ?? [] as $r) {
@@ -127,6 +128,19 @@ function validate_install(array $in): array
                 if (!empty($pkg['repository']) && isset($byRepo[$pkg['repository']])) {
                     $repos[$pkg['repository']] = $byRepo[$pkg['repository']];
                 }
+            }
+        }
+        foreach (mageos_modules() as $m) {
+            if (!isset($mageos[$m['name']])) {
+                continue;
+            }
+            if (in_array($distro['id'], (array)($m['incompatible_with'] ?? []), true)) {
+                $err[] = $m['label'] . ' non è compatibile con la distro ' . $distro['name'] . '.';
+                continue;
+            }
+            // Già incluso dalla distro (es. RMA in quella italiana): non lo duplichiamo.
+            if (!preg_grep('#^' . preg_quote($m['name'], '#') . ':#', $packages)) {
+                $packages[] = $m['name'] . ':' . $m['constraint'];
             }
         }
     }
@@ -147,7 +161,7 @@ function validate_install(array $in): array
         'target' => $target,
         'base_url' => $baseUrl,
         'backend_frontname' => $front,
-        'store_name' => $s('store_name') ?: 'Mage-OS Store',
+        'store_name' => $s('store_name') ?: 'Magento Store',
         'language' => $lang, 'currency' => $cur, 'timezone' => $tz,
         'db' => $db,
         'create_db' => !empty($in['create_db']),
@@ -157,6 +171,7 @@ function validate_install(array $in): array
         'admin' => $admin,
         'deploy_mode' => $mode,
         'sample_data' => !empty($in['sample_data']),
+        'italian_tax' => !empty($in['italian_tax']),
         'disable_2fa' => !empty($in['disable_2fa']),
         'install_cron' => !empty($in['install_cron']),
         'save_auth' => !empty($in['save_auth']),

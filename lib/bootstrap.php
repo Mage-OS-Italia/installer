@@ -1,16 +1,17 @@
 <?php
 declare(strict_types=1);
 
-const APP_NAME = 'Mage-OS Installer';
-const APP_VERSION = '0.1.0';
-const MAGEOS_REPO = 'https://repo.mage-os.org/';
+const APP_NAME = 'Magento Installer';
+const APP_VERSION = '0.2.0';
+/** Mirror pubblico dei pacchetti Magento Open Source (stessi pacchetti di repo.magento.com, nessuna chiave Adobe). */
+const MAGENTO_REPO = 'https://mirror.mage-os.org/';
 
 define('APP_ROOT', dirname(__DIR__));
 
 /** Cartella temporanea privata dell'installer (job, log, cache, token): fuori dalla document root. */
 function app_tmp(string $sub = ''): string
 {
-    $dir = rtrim(sys_get_temp_dir(), '/') . '/mageos-installer-' . substr(md5(APP_ROOT), 0, 10);
+    $dir = rtrim(sys_get_temp_dir(), '/') . '/magento-installer-' . substr(md5(APP_ROOT), 0, 10);
     if (!is_dir($dir)) {
         @mkdir($dir, 0700, true);
     }

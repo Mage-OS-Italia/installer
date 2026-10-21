@@ -67,10 +67,17 @@
     return (d?.repositories || []).filter((r) => ids.has(r.id));
   }
 
+  /** Moduli Mage-OS scelti dall'elenco (esclusi quelli già inclusi dalla distro). */
+  const distroPackageNames = () => (distro()?.packages || []).filter((p) => p.required).map((p) => p.name);
+  const isIncompatible = (m) => (m.incompatible_with || []).includes(S.f.distro);
+  const selectedMageos = () => S.boot.mageos.filter((m) => S.f.mageos.includes(m.name) && !isIncompatible(m) && !distroPackageNames().includes(m.name));
+
   function applyDistroDefaults() {
     const d = distro();
     if (!d) return;
     S.f.packages = (d.packages || []).filter((p) => p.default && !p.required).map((p) => p.name);
+    S.f.mageos = S.f.mageos.filter((n) => !isIncompatible(S.boot.mageos.find((m) => m.name === n) || {}));
+    if (!S.touched.italian_tax) S.f.italian_tax = !!(d.defaults || {}).italian_tax;
     const df = d.defaults || {};
     if (!S.touched.language && df.language) S.f.language = df.language;
     if (!S.touched.currency && df.currency) S.f.currency = df.currency;
@@ -98,8 +105,8 @@
     const latest = b.versions[0];
     const parent = (b.server.parent_dir || '').replace(/\/+$/, '');
     S.f = {
-      version: latest.version, distro: (b.distros.find((d) => d.default) || b.distros[0])?.id || 'normal', packages: [], sample_data: false,
-      target: parent + '/mage-os-store', base_url: '', store_name: 'Mage-OS Store', backend_frontname: 'admin',
+      version: latest.version, distro: (b.distros.find((d) => d.default) || b.distros[0])?.id || 'normal', packages: [], mageos: [], sample_data: false, italian_tax: false,
+      target: parent + '/magento-store', base_url: '', store_name: 'Magento Store', backend_frontname: 'admin',
       language: 'it_IT', currency: 'EUR', timezone: 'Europe/Rome',
       db_host: 'localhost', db_name: '', db_user: 'root', db_password: '', db_prefix: '', create_db: true, cleanup_db: false,
       search_engine: 'opensearch', search_host: 'localhost', search_port: 9200, search_prefix: 'magento2', search_user: '', search_password: '',
@@ -115,7 +122,7 @@
   function render() {
     root.innerHTML = `
       <aside class="side">
-        <div class="brand"><img src="assets/logo.svg" alt=""><div><h1>Mage-OS<br>Installer</h1><small>v${esc(S.boot.app.version)}</small></div></div>
+        <div class="brand"><img src="assets/logo.svg" alt=""><div><h1>Magento<br>Installer</h1><small>v${esc(S.boot.app.version)}</small></div></div>
         <ol class="stepper card">${STEPS.map((t, i) => `
           <li class="${i === S.step ? 'active' : i < S.step ? 'done' : ''}"><span class="num">${i < S.step ? '✓' : i + 1}</span><span>${esc(t)}</span></li>`).join('')}
         </ol>
@@ -130,9 +137,9 @@
     const v = version();
     const s = S.boot.server;
     $('#side-info').innerHTML = `
-      <h3>Cos'è Mage-OS</h3>
-      <p>Distribuzione community-driven di Magento Open Source: stesso ecosistema, aggiornamenti rilasciati dalla community e pacchetti su <code>repo.mage-os.org</code>.</p>
-      <div class="links"><a href="https://mage-os.org" target="_blank" rel="noopener">mage-os.org</a><a href="https://github.com/mage-os" target="_blank" rel="noopener">GitHub</a></div>
+      <h3>Cos'è Magento Open Source</h3>
+      <p>La piattaforma ecommerce open source di Adobe. L'installer scarica i pacchetti ufficiali dal mirror pubblico <code>mirror.mage-os.org</code>: non servono chiavi Marketplace. I moduli opzionali arrivano da <a href="https://mage-os.org" target="_blank" rel="noopener">Mage-OS</a>.</p>
+      <div class="links"><a href="https://developer.adobe.com/commerce/docs/" target="_blank" rel="noopener">Documentazione</a><a href="https://github.com/magento/magento2" target="_blank" rel="noopener">GitHub</a></div>
       <h3 style="margin-top:16px">Release selezionata</h3>
       <dl><dt>Versione</dt><dd>${esc(v?.version)}</dd><dt>PHP</dt><dd>${esc(phpHuman(v?.php))}</dd>${v?.time ? `<dt>Rilascio</dt><dd>${esc(v.time)}</dd>` : ''}</dl>
       <h3>Questo server</h3>
@@ -178,10 +185,10 @@
     const required = (d?.packages || []).filter((p) => p.required);
     return `
       <h2>Benvenuto 👋</h2>
-      <p class="lead">Scegli la versione di Mage-OS e la distro: l'installer scarica tutto, configura il database e crea il negozio.</p>
-      ${!['live', 'cache'].includes(S.boot.versions_source) ? `<div class="notice" style="margin:0 0 18px">Elenco versioni ${S.boot.versions_source === 'fallback' ? 'minimo (repo.mage-os.org non raggiungibile)' : 'dall\'ultima copia salvata (repo.mage-os.org non raggiungibile)'}.</div>` : ''}
+      <p class="lead">Scegli la versione di Magento Open Source e la distro: l'installer scarica tutto, configura il database e crea il negozio.</p>
+      ${!['live', 'cache'].includes(S.boot.versions_source) ? `<div class="notice" style="margin:0 0 18px">Elenco versioni ${S.boot.versions_source === 'fallback' ? 'minimo (il repository Magento non è raggiungibile)' : 'dall\'ultima copia salvata (il repository Magento non è raggiungibile)'}.</div>` : ''}
       <div class="grid">
-        ${select('Versione di Mage-OS', 'version', opts)}
+        ${select('Versione di Magento Open Source', 'version', opts)}
         <div class="field"><span>Requisiti di questa versione</span><div class="chips" style="margin-top:4px"><span class="chip accent">PHP ${esc(phpHuman(v.php))}</span>${v.time ? `<span class="chip">rilasciata ${esc(v.time)}</span>` : ''}</div></div>
       </div>
 
@@ -198,12 +205,32 @@
         ${optional.map((p) => `<label class="check"><input type="checkbox" data-pkg="${esc(p.name)}" ${S.f.packages.includes(p.name) ? 'checked' : ''}><span><b>${esc(p.label)}</b><small>${esc(p.description || '')} · <code>${esc(p.name)}</code></small></span></label>`).join('')}
       </div>` : ''}
 
+      ${mageosList()}
+
       <h3>Opzioni</h3>
-      ${checkbox('sample_data', 'Installa i dati di esempio', 'Catalogo demo (prodotti, categorie, CMS, regole). Utile per provare il negozio; aggiunge circa 20 pacchetti e alcune centinaia di MB.')}
+      <div class="checks">
+        ${checkbox('sample_data', 'Installa i dati di esempio', 'Catalogo demo (prodotti, categorie, CMS, regole). Utile per provare il negozio; aggiunge circa 20 pacchetti e alcune centinaia di MB.')}
+        ${checkbox('italian_tax', 'Imposta le regole IVA italiane', 'Prezzi IVA inclusa, aliquota ordinaria 22% e classi per le aliquote ridotte 10% e 4%. Il calcolo segue l\'indirizzo di spedizione: per vendere ad altri paesi UE aggiungi le rispettive aliquote.')}
+      </div>
 
       <h3>Dove installare</h3>
       ${field('Cartella di destinazione', 'target', { full: true, ph: '/var/www/mio-negozio', hint: 'Percorso assoluto sul server. Deve essere vuota o non esistere: verrà creata. La document root del sito dovrà puntare a <code>pub/</code>.' })}
       ${actions(false, true)}`;
+  }
+
+  /** Elenco dei moduli Mage-OS opzionali, raggruppati per area. */
+  function mageosList() {
+    const own = distroPackageNames();
+    const groups = [...new Set(S.boot.mageos.map((m) => m.group))];
+    return `<h3>Moduli Mage-OS</h3>
+      <p class="muted" style="margin:-6px 0 12px;font-size:13px">Moduli opzionali della community Mage-OS, installabili con qualsiasi distro (da Packagist, senza credenziali).</p>
+      ${groups.map((g) => `<div class="group"><h4 class="pkg-group">${esc(g)}</h4><div class="pkg-list">
+        ${S.boot.mageos.filter((m) => m.group === g).map((m) => {
+          const included = own.includes(m.name);
+          const off = isIncompatible(m);
+          return `<label class="check" ${off || included ? 'style="opacity:.6"' : ''}><input type="checkbox" data-mageos="${esc(m.name)}" ${included || S.f.mageos.includes(m.name) ? 'checked' : ''} ${off || included ? 'disabled' : ''}><span><b>${esc(m.label)}</b>${included ? ' <span class="chip">incluso nella distro</span>' : ''}${off ? ' <span class="chip">non disponibile con questa distro</span>' : ''}<small>${esc(m.description)} · <code>${esc(m.name)}</code></small></span></label>`;
+        }).join('')}
+      </div></div>`).join('')}`;
   }
 
   // ------------------------------------------------------------ step 1
@@ -219,7 +246,7 @@
 
   function step1() {
     if (S.reqLoading || !S.req) {
-      return `<h2>Requisiti del server</h2><p class="lead">Controllo in corso per Mage-OS ${esc(S.f.version)}…</p><div class="boot" style="padding:40px"><div class="spinner"></div></div>${actions(true, false)}`;
+      return `<h2>Requisiti del server</h2><p class="lead">Controllo in corso per Magento ${esc(S.f.version)}…</p><div class="boot" style="padding:40px"><div class="spinner"></div></div>${actions(true, false)}`;
     }
     const r = S.req;
     if (r.error) return `<h2>Requisiti del server</h2><p class="err">${esc(r.error)}</p>${actions(true, false)}`;
@@ -229,7 +256,7 @@
       : r.warnings ? `<b>Tutto a posto per procedere</b>, con ${r.warnings} avvis${r.warnings === 1 ? 'o' : 'i'} da valutare.` : '<b>Il server soddisfa tutti i requisiti.</b>';
     return `
       <h2>Requisiti del server</h2>
-      <p class="lead">Verifica per Mage-OS ${esc(S.f.version)} — PHP ${esc(phpHuman(r.version?.php))}.</p>
+      <p class="lead">Verifica per Magento ${esc(S.f.version)} — PHP ${esc(phpHuman(r.version?.php))}.</p>
       <div class="summary-bar ${cls}"><span style="font-size:22px">${r.blocking ? '⛔' : r.warnings ? '⚠️' : '✅'}</span><div style="flex:1">${msg}</div><button class="btn small" data-act="recheck">Ricontrolla</button></div>
       ${r.groups.map((g) => `<div class="group"><h3>${esc(g.title)}</h3><div class="group-box">${g.checks.map((c) => `
         <div class="req ${c.status}"><span class="ico">${c.status === 'ok' ? '✓' : c.status === 'warn' ? '!' : '✕'}</span>
@@ -267,11 +294,11 @@
   function step2() {
     return `
       <h2>Database e ricerca</h2>
-      <p class="lead">Mage-OS usa MySQL o MariaDB per i dati e OpenSearch o Elasticsearch per catalogo e ricerca.</p>
+      <p class="lead">Magento usa MySQL o MariaDB per i dati e OpenSearch o Elasticsearch per catalogo e ricerca.</p>
       <h3 style="margin-top:0">Database</h3>
       <div class="grid">
         ${field('Host', 'db_host', { ph: 'localhost', hint: 'Anche host:porta o percorso del socket.' })}
-        ${field('Nome database', 'db_name', { ph: 'mage_os' })}
+        ${field('Nome database', 'db_name', { ph: 'magento' })}
         ${field('Utente', 'db_user')}
         ${field('Password', 'db_password', { type: 'password' })}
         ${field('Prefisso tabelle (opzionale)', 'db_prefix', { ph: 'es. mg_' })}
@@ -370,13 +397,13 @@
   function step4() {
     if (S.job) return jobShell();
     const f = S.f, d = distro(), v = version();
-    const pk = selectedPackages();
+    const pk = [...selectedPackages(), ...selectedMageos()];
     const row = (k, val) => `<dt>${k}</dt><dd>${val}</dd>`;
     return `
       <h2>Riepilogo</h2>
       <p class="lead">Controlla i dati: quando premi <b>Installa</b> parte il download e la configurazione. Puoi lasciare la pagina aperta e seguire il log in diretta.</p>
       <div class="recap">
-        <section><h4>Mage-OS</h4><dl>${row('Versione', esc(v.version))}${row('Distro', esc(d.name))}${row('Moduli extra', pk.length)}${row('Dati di esempio', f.sample_data ? 'sì' : 'no')}${row('Modalità', esc(f.deploy_mode))}</dl></section>
+        <section><h4>Magento</h4><dl>${row('Versione', esc(v.version))}${row('Distro', esc(d.name))}${row('Moduli extra', pk.length)}${row('Dati di esempio', f.sample_data ? 'sì' : 'no')}${row('IVA italiana', f.italian_tax ? 'sì' : 'no')}${row('Modalità', esc(f.deploy_mode))}</dl></section>
         <section><h4>Destinazione</h4><dl>${row('Cartella', esc(f.target))}${row('Base URL', esc(f.base_url))}${row('Admin', esc('/' + f.backend_frontname))}</dl></section>
         <section><h4>Database</h4><dl>${row('Server', esc((S.db?.server || '') + ' ' + (S.db?.version || '')))}${row('Host', esc(f.db_host))}${row('Database', esc(f.db_name))}${row('Utente', esc(f.db_user))}${row('Svuota', f.cleanup_db ? 'sì' : 'no')}</dl></section>
         <section><h4>Ricerca</h4><dl>${row('Motore', esc(f.search_engine))}${row('Host', esc(f.search_host + ':' + f.search_port))}${row('Prefisso', esc(f.search_prefix))}</dl></section>
@@ -385,18 +412,18 @@
       </div>
       ${pk.length ? `<h3>Pacchetti che verranno installati</h3><div class="chips">${pk.map((p) => `<span class="chip">${esc(p.name)}</span>`).join('')}</div>` : ''}
       <div id="start-err"></div>
-      <div class="actions"><button class="btn" data-nav="back">← Indietro</button><div class="right"><button class="btn primary" data-act="start" style="padding:13px 26px;font-size:16px">🚀 Installa Mage-OS</button></div></div>`;
+      <div class="actions"><button class="btn" data-nav="back">← Indietro</button><div class="right"><button class="btn primary" data-act="start" style="padding:13px 26px;font-size:16px">🚀 Installa Magento</button></div></div>`;
   }
 
   async function startInstall(btn) {
     btn.disabled = true;
     btn.textContent = 'Avvio…';
     const f = S.f;
-    const payload = { ...f, packages: f.packages };
+    const payload = { ...f, packages: f.packages, mageos: selectedMageos().map((m) => m.name) };
     const r = await api('start', payload);
     if (r.error) {
       btn.disabled = false;
-      btn.textContent = '🚀 Installa Mage-OS';
+      btn.textContent = '🚀 Installa Magento';
       $('#start-err').innerHTML = `<div class="notice" style="margin-top:20px;border-color:rgba(248,113,113,.5);background:rgba(248,113,113,.08);color:#fecaca"><b>${esc(r.error)}</b>${(r.errors || []).length ? `<ul style="margin:6px 0 0;padding-left:20px">${r.errors.map((e) => `<li>${esc(e)}</li>`).join('')}</ul>` : ''}</div>`;
       return;
     }
@@ -407,7 +434,7 @@
   function jobShell() {
     return `
       <h2>Installazione in corso</h2>
-      <p class="lead" id="job-lead">Mage-OS ${esc(S.f.version)} · ${esc(S.f.target)}</p>
+      <p class="lead" id="job-lead">Magento ${esc(S.f.version)} · ${esc(S.f.target)}</p>
       <div class="progress-top"><div class="bar"><i id="job-bar"></i></div><b id="job-pct">0%</b></div>
       <div class="tasks" id="job-tasks"></div>
       <div id="job-result"></div>
@@ -498,7 +525,7 @@
       const r = st.result;
       $('#job-lead').textContent = 'Fatto!';
       out.innerHTML = `
-        <div class="success"><div class="big">🎉</div><h2 style="margin:0 0 4px">Mage-OS ${esc(r.version)} è installato</h2><p class="muted">Tempo totale: ${Math.floor(r.duration / 60)} min ${r.duration % 60} s · modalità ${esc(r.mode)}</p></div>
+        <div class="success"><div class="big">🎉</div><h2 style="margin:0 0 4px">Magento ${esc(r.version)} è installato</h2><p class="muted">Tempo totale: ${Math.floor(r.duration / 60)} min ${r.duration % 60} s · modalità ${esc(r.mode)}</p></div>
         <div class="links-grid">
           <div class="link-card"><small>Negozio</small><div class="v"><a href="${esc(r.storefront)}" target="_blank" rel="noopener">${esc(r.storefront)}</a></div></div>
           <div class="link-card"><small>Pannello admin</small><div class="v"><a href="${esc(r.admin)}" target="_blank" rel="noopener">${esc(r.admin)}</a></div></div>
@@ -541,6 +568,10 @@
       };
       el.addEventListener(el.type === 'checkbox' || el.tagName === 'SELECT' ? 'change' : 'input', handler);
     });
+    $$('[data-mageos]', scope).forEach((el) => el.addEventListener('change', () => {
+      const n = el.dataset.mageos;
+      S.f.mageos = el.checked ? [...new Set([...S.f.mageos, n])] : S.f.mageos.filter((x) => x !== n);
+    }));
     $$('[data-pkg]', scope).forEach((el) => el.addEventListener('change', () => {
       const n = el.dataset.pkg;
       S.f.packages = el.checked ? [...new Set([...S.f.packages, n])] : S.f.packages.filter((x) => x !== n);

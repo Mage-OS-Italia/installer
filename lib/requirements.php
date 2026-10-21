@@ -55,7 +55,7 @@ function run_requirements(array $p): array
     if ($constraint !== '') {
         $php[] = chk('php_web', 'PHP del web server (' . PHP_SAPI . ')', php_satisfies(PHP_VERSION, $constraint) ? 'ok' : 'fail',
             'Installato ' . PHP_VERSION . ' · richiesto ' . $phpHuman,
-            'Usa una versione PHP supportata da Mage-OS ' . ($version['version'] ?? '') . '.');
+            'Usa una versione PHP supportata da Magento ' . ($version['version'] ?? '') . '.');
     }
     if ($cli) {
         $php[] = chk('php_cli', 'PHP da riga di comando', $constraint === '' || php_satisfies($cli['version'], $constraint) ? 'ok' : 'fail',
@@ -96,7 +96,7 @@ function run_requirements(array $p): array
         $detail = $web && $inCli ? 'Caricata' : (!$web && !$inCli ? 'Mancante (web e CLI)' : (!$web ? 'Mancante nel PHP web' : 'Mancante nel PHP CLI'));
         $ext[] = chk('ext_' . $e, 'ext-' . $e, $status, $detail, $status === 'fail' ? "Installa e abilita l'estensione PHP $e." : '');
     }
-    $groups[] = ['title' => 'Estensioni PHP richieste da Mage-OS ' . ($version['version'] ?? ''), 'checks' => $ext];
+    $groups[] = ['title' => 'Estensioni PHP richieste da Magento ' . ($version['version'] ?? ''), 'checks' => $ext];
 
     // --- Strumenti ---
     $tools = [];
@@ -140,7 +140,7 @@ function run_requirements(array $p): array
 
     // --- Rete ---
     $net = [];
-    $hosts = [MAGEOS_REPO . 'packages.json' => 'Repository Mage-OS', 'https://repo.packagist.org/packages.json' => 'Packagist'];
+    $hosts = [MAGENTO_REPO . 'packages.json' => 'Repository Magento (mirror)', 'https://repo.packagist.org/packages.json' => 'Packagist'];
     foreach ((array)($p['repos'] ?? []) as $url) {
         if (is_string($url) && preg_match('#^https://[\w.\-]+(/|$)#', $url)) {
             $hosts[rtrim($url, '/') . '/packages.json'] = parse_url($url, PHP_URL_HOST);
@@ -183,7 +183,7 @@ function server_info(): array
     ];
 }
 
-/** Versioni di database accettate da Magento/Mage-OS 3.x (SqlVersionProvider). */
+/** Versioni di database accettate da Magento 2.4.x recente (SqlVersionProvider). */
 const DB_SUPPORTED_HUMAN = [
     'mysql' => '8.0 – 8.4',
     'mariadb' => '10.2 – 10.6, 10.11, 11.4 – 11.8, 12.2 – 12.3',
@@ -228,7 +228,7 @@ function test_db(array $p): array
     if (!db_is_supported($isMaria, $num)) {
         $list = $isMaria ? DB_SUPPORTED_HUMAN['mariadb'] : DB_SUPPORTED_HUMAN['mysql'];
         return $res + ['status' => 'fail', 'unsupported' => true,
-            'message' => $res['server'] . " $num non è supportato da Mage-OS. Versioni supportate: $list."];
+            'message' => $res['server'] . " $num non è supportato da Magento. Versioni supportate: $list."];
     }
     $st = $pdo->prepare('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ?');
     $st->execute([$name]);

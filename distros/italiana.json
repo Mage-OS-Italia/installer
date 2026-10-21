@@ -3,16 +3,18 @@
     "order": 30,
     "name": "Italiana",
     "tagline": "Lingua, valuta e moduli per il mercato italiano",
-    "description": "Mage-OS configurato per l'Italia: lingua it_IT, euro, fuso Europe/Rome, paese predefinito IT, pacchetto lingua e i moduli Threecommerce a scelta.",
+    "description": "Magento Open Source configurato per l'Italia: lingua it_IT, euro, fuso Europe/Rome, paese predefinito IT, regole IVA italiane, modulo Resi (RMA) di Mage-OS e moduli Threecommerce a scelta.",
     "highlights": [
-        "Pacchetto lingua italiano",
+        "Pacchetto lingua italiano e modulo Resi (RMA) di Mage-OS",
         "EUR, Europe/Rome, paese IT, kg e lunedì come primo giorno",
+        "IVA italiana preimpostata (modificabile nelle opzioni)",
         "Moduli Threecommerce selezionabili"
     ],
     "defaults": {
         "language": "it_IT",
         "currency": "EUR",
-        "timezone": "Europe/Rome"
+        "timezone": "Europe/Rome",
+        "italian_tax": true
     },
     "repositories": [
         {
@@ -23,6 +25,13 @@
         }
     ],
     "packages": [
+        {
+            "name": "mage-os/module-rma",
+            "constraint": "^2.5",
+            "required": true,
+            "label": "Resi (RMA)",
+            "description": "Gestione dei resi, obbligatoria per i negozi italiani. Da Mage-OS."
+        },
         {
             "name": "threecommerce/m2-language-it-it",
             "constraint": "^1.1",

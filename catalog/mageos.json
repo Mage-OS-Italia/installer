@@ -1,0 +1,127 @@
+[
+    {
+        "name": "mage-os/module-blog",
+        "constraint": "^1.4",
+        "group": "Contenuti",
+        "label": "Blog",
+        "description": "Articoli, categorie, tag e autori con SEO e GraphQL."
+    },
+    {
+        "name": "mage-os/module-faq",
+        "constraint": "^1.1",
+        "group": "Contenuti",
+        "label": "FAQ",
+        "description": "Domande frequenti con gestione in admin, widget e contenuto Page Builder. Installa anche il modulo SEO.",
+        "incompatible_with": [
+            "light"
+        ]
+    },
+    {
+        "name": "mage-os/module-seo",
+        "constraint": "^2.1",
+        "group": "SEO e marketing",
+        "label": "SEO",
+        "description": "Dati strutturati JSON-LD, meta tag e gestione dei canonical. Richiede MSI: non disponibile con la distro Light.",
+        "incompatible_with": [
+            "light"
+        ]
+    },
+    {
+        "name": "mage-os/module-hreflang",
+        "constraint": "^1.3",
+        "group": "SEO e marketing",
+        "label": "Hreflang",
+        "description": "Indicazione della lingua delle pagine per i motori di ricerca."
+    },
+    {
+        "name": "mage-os/module-meta-robots-tag",
+        "constraint": "^1.2",
+        "group": "SEO e marketing",
+        "label": "Meta robots",
+        "description": "Tag NoIndex / NoFollow / NoArchive per prodotti, categorie e pagine."
+    },
+    {
+        "name": "mage-os/module-llm-txt",
+        "constraint": "^0.2",
+        "group": "SEO e marketing",
+        "label": "llms.txt",
+        "description": "Genera llms.txt per aiutare gli assistenti AI a capire il negozio."
+    },
+    {
+        "name": "mage-os/module-newsletter-coupon",
+        "constraint": "^1.1",
+        "group": "SEO e marketing",
+        "label": "Coupon newsletter",
+        "description": "Genera un coupon per chi si iscrive alla newsletter."
+    },
+    {
+        "name": "mage-os/module-shopping-feed",
+        "constraint": "^1.2",
+        "group": "SEO e marketing",
+        "label": "Feed prodotti",
+        "description": "Feed per Google Shopping e altri comparatori."
+    },
+    {
+        "name": "mage-os/module-rma",
+        "constraint": "^2.5",
+        "group": "Vendite e clienti",
+        "label": "Resi (RMA)",
+        "description": "Richieste di reso gestite da storefront e admin. Obbligatorio per i negozi italiani."
+    },
+    {
+        "name": "mage-os/module-passkey-auth",
+        "constraint": "^1.0",
+        "group": "Vendite e clienti",
+        "label": "Passkey",
+        "description": "Accesso dei clienti con passkey (WebAuthn)."
+    },
+    {
+        "name": "mage-os/module-maxmind-geoip-redirect",
+        "constraint": "^2.1",
+        "group": "Vendite e clienti",
+        "label": "Redirect GeoIP",
+        "description": "Reindirizza al sito giusto in base al paese (MaxMind GeoLite2)."
+    },
+    {
+        "name": "mage-os/module-admin-activity-log",
+        "constraint": "^2.0",
+        "group": "Amministrazione",
+        "label": "Log attività admin",
+        "description": "Registra le azioni degli utenti nel pannello di amministrazione."
+    },
+    {
+        "name": "mage-os/module-extension-directory",
+        "constraint": "^0.2",
+        "group": "Amministrazione",
+        "label": "Extension Directory",
+        "description": "Sfoglia le estensioni della directory Mage-OS dall'admin."
+    },
+    {
+        "name": "mage-os/mageos-async-events",
+        "constraint": "^4.0",
+        "group": "Sviluppo e integrazioni",
+        "label": "Async Events",
+        "description": "Elabora in modo asincrono qualsiasi evento di Magento verso sistemi esterni."
+    },
+    {
+        "name": "mage-os/mageos-async-events-admin-ui",
+        "constraint": "^1.1",
+        "group": "Sviluppo e integrazioni",
+        "label": "Async Events: admin",
+        "description": "Sottoscrizioni agli eventi da form in admin. Installa anche Async Events."
+    },
+    {
+        "name": "mage-os/module-automatic-translation",
+        "constraint": "^2.4",
+        "group": "Intelligenza artificiale",
+        "label": "Traduzione automatica",
+        "description": "Traduzione AI dei contenuti del catalogo e del CMS."
+    },
+    {
+        "name": "mage-os/module-catalog-data-ai",
+        "constraint": "^1.0",
+        "group": "Intelligenza artificiale",
+        "label": "Descrizioni con AI",
+        "description": "Genera descrizioni prodotto e testi simili con un modello AI."
+    }
+]

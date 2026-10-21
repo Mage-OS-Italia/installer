@@ -34,7 +34,7 @@ final class Worker
 
     private const STEPS = [
         'preflight' => 'Verifica ambiente e database',
-        'download' => 'Download di Mage-OS',
+        'download' => 'Download di Magento Open Source',
         'packages' => 'Installazione dei pacchetti (composer)',
         'install' => 'Installazione di Magento (setup:install)',
         'configure' => 'Configurazione del negozio',
@@ -58,7 +58,7 @@ final class Worker
         $steps = [];
         foreach (self::STEPS as $sid => $label) {
             if ($sid === 'download') {
-                $label = 'Download di Mage-OS ' . $this->cfg['version'];
+                $label = 'Download di Magento Open Source ' . $this->cfg['version'];
             }
             $steps[] = ['id' => $sid, 'label' => $label, 'state' => 'pending', 'detail' => '', 'progress' => null];
         }
@@ -68,7 +68,7 @@ final class Worker
 
     public function main(): int
     {
-        $this->log('Mage-OS Installer ' . APP_VERSION . ' · Mage-OS ' . $this->cfg['version'] . ' · distro "' . $this->cfg['distro'] . '"');
+        $this->log(APP_NAME . ' ' . APP_VERSION . ' · Magento Open Source ' . $this->cfg['version'] . ' · distro "' . $this->cfg['distro'] . '"');
         $this->log('Destinazione: ' . $this->cfg['target']);
         try {
             $this->step('preflight', fn() => $this->preflight());
@@ -120,7 +120,7 @@ final class Worker
         $this->dbVersion = $vm[1] ?? '';
         if (!db_is_supported($this->dbIsMaria, $this->dbVersion)) {
             if (!$c['allow_unsupported_db']) {
-                throw new StepFailure(($this->dbIsMaria ? 'MariaDB ' : 'MySQL ') . $this->dbVersion . ' non è supportato da Mage-OS.');
+                throw new StepFailure(($this->dbIsMaria ? 'MariaDB ' : 'MySQL ') . $this->dbVersion . ' non è supportato da Magento.');
             }
             $this->log('⚠ ' . ($this->dbIsMaria ? 'MariaDB ' : 'MySQL ') . $this->dbVersion . ' non è nell\'elenco ufficiale: procedo su richiesta (solo sviluppo).');
         }
@@ -191,8 +191,8 @@ final class Worker
         if (!is_dir($parent) && !@mkdir($parent, 0775, true)) {
             throw new StepFailure("Impossibile creare $parent");
         }
-        $cmd = $this->composerBase['cmd'] . ' create-project --repository-url=' . escapeshellarg(MAGEOS_REPO)
-            . ' mage-os/project-community-edition ' . escapeshellarg($c['target']) . ' ' . escapeshellarg($c['version'])
+        $cmd = $this->composerBase['cmd'] . ' create-project --repository-url=' . escapeshellarg(MAGENTO_REPO)
+            . ' magento/project-community-edition ' . escapeshellarg($c['target']) . ' ' . escapeshellarg($c['version'])
             . ' --no-interaction --no-progress --no-ansi --prefer-dist --no-audit --no-install';
         $code = $this->run($cmd, $parent, $this->composerBase['env']);
         if ($code !== 0 || !is_file($c['target'] . '/composer.json')) {
@@ -248,7 +248,7 @@ final class Worker
             $require[$n] = $v;
         }
         if ($c['sample_data']) {
-            foreach (sample_data_packages($c['version']) as $spec) {
+            foreach (sample_data_packages() as $spec) {
                 [$n, $v] = explode(':', $spec, 2);
                 $require[$n] = $v;
             }
@@ -257,7 +257,7 @@ final class Worker
             $json['require'][$n] = $v;
         }
         if ($c['replace']) {
-            $this->log(count($c['replace']) . ' pacchetti Mage-OS esclusi tramite "replace".');
+            $this->log(count($c['replace']) . ' pacchetti Magento esclusi tramite "replace".');
         }
         if ($require) {
             $this->log('Pacchetti aggiunti: ' . implode(', ', array_keys($require)));
@@ -347,6 +347,11 @@ final class Worker
         }
         $this->detail('configure', 'Configurazione salvata');
 
+        if ($c['italian_tax']) {
+            $this->detail('configure', 'IVA italiana…');
+            $this->italianTax();
+        }
+
         if ($c['disable_2fa']) {
             $present = [];
             $modules = @include $c['target'] . '/app/etc/config.php';
@@ -366,6 +371,75 @@ final class Worker
 
         $this->detail('configure', 'Modalità ' . $c['deploy_mode'] . '…');
         $this->mage($c['deploy_mode'] === 'production' ? 'deploy:mode:set production' : 'deploy:mode:set developer --skip-compilation');
+    }
+
+    /**
+     * Regole IVA italiane: prezzi di listino IVA inclusa, aliquota ordinaria 22% sulla classe "Taxable Goods"
+     * e due classi per le aliquote ridotte (10% e 4%). Le regole stanno nel database: non c'è un comando CLI.
+     * Il calcolo segue l'indirizzo di spedizione (default di Magento): per vendere ad altri paesi UE servono
+     * le rispettive aliquote.
+     */
+    private function italianTax(): void
+    {
+        $c = $this->cfg;
+        $conf = [
+            'tax/calculation/price_includes_tax' => 1,
+            'tax/calculation/shipping_includes_tax' => 1,
+            'tax/calculation/apply_after_discount' => 1,
+            'tax/calculation/discount_tax' => 1,
+            'tax/calculation/cross_border_trade_enabled' => 1,
+            'tax/display/type' => 2,
+            'tax/display/shipping' => 2,
+            'tax/cart_display/price' => 2,
+            'tax/cart_display/subtotal' => 2,
+            'tax/cart_display/shipping' => 2,
+            'tax/sales_display/price' => 2,
+            'tax/sales_display/subtotal' => 2,
+            'tax/sales_display/shipping' => 2,
+        ];
+        foreach ($conf as $path => $value) {
+            $this->mage('config:set ' . escapeshellarg($path) . ' ' . escapeshellarg((string)$value), false);
+        }
+
+        $pdo = db_connect($c['db']['host'], $c['db']['user'], $c['db']['password'], $c['db']['name']);
+        $t = fn(string $table): string => '`' . str_replace('`', '', $c['db']['prefix'] . $table) . '`';
+        $classId = function (string $name, string $type) use ($pdo, $t): int {
+            $st = $pdo->prepare('SELECT class_id FROM ' . $t('tax_class') . ' WHERE class_name = ? AND class_type = ? LIMIT 1');
+            $st->execute([$name, $type]);
+            $id = $st->fetchColumn();
+            if ($id === false) {
+                $pdo->prepare('INSERT INTO ' . $t('tax_class') . ' (class_name, class_type) VALUES (?, ?)')->execute([$name, $type]);
+                $id = $pdo->lastInsertId();
+            }
+            return (int)$id;
+        };
+
+        $customerClass = $classId('Retail Customer', 'CUSTOMER');
+        $shippingClass = $classId('Taxable Goods', 'PRODUCT');
+        $rules = [
+            ['IVA 22%', 22.0, $shippingClass],
+            ['IVA 10%', 10.0, $classId('IVA ridotta 10%', 'PRODUCT')],
+            ['IVA 4%', 4.0, $classId('IVA ridotta 4%', 'PRODUCT')],
+        ];
+        $pdo->beginTransaction();
+        try {
+            foreach ($rules as [$label, $rate, $productClass]) {
+                $code = 'IT-' . str_replace(' ', '-', $label);
+                $pdo->prepare('INSERT INTO ' . $t('tax_calculation_rate') . ' (tax_country_id, tax_region_id, tax_postcode, code, rate) VALUES (?, 0, ?, ?, ?)')
+                    ->execute(['IT', '*', $code, $rate]);
+                $rateId = (int)$pdo->lastInsertId();
+                $pdo->prepare('INSERT INTO ' . $t('tax_calculation_rule') . ' (code, priority, position, calculate_subtotal) VALUES (?, 0, 0, 0)')->execute([$label]);
+                $ruleId = (int)$pdo->lastInsertId();
+                $pdo->prepare('INSERT INTO ' . $t('tax_calculation') . ' (tax_calculation_rate_id, tax_calculation_rule_id, customer_tax_class_id, product_tax_class_id) VALUES (?, ?, ?, ?)')
+                    ->execute([$rateId, $ruleId, $customerClass, $productClass]);
+            }
+            $pdo->commit();
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            throw new StepFailure('Impossibile creare le regole IVA: ' . $e->getMessage());
+        }
+        $this->mage('config:set tax/classes/shipping_tax_class ' . $shippingClass, false);
+        $this->log('Regole IVA create: 22% (Taxable Goods), 10% e 4% (classi "IVA ridotta"), prezzi IVA inclusa.');
     }
 
     private function finalize(): void
@@ -398,13 +472,13 @@ final class Worker
         $this->log('✔ Installazione completata in ' . gmdate('i\m s\s', $dur) . '.');
     }
 
-    /** `mage-os/sample-data-media` annida le immagini quando la cartella esiste già: riporta tutto al suo posto. */
+    /** `magento/sample-data-media` annida le immagini quando la cartella esiste già: riporta tutto al suo posto. */
     private function fixSampleMedia(): void
     {
         $t = $this->cfg['target'];
         $pairs = [
-            $t . '/vendor/mage-os/sample-data-media/catalog/product' => $t . '/pub/media/catalog/product',
-            $t . '/vendor/mage-os/sample-data-media/downloadable/files' => $t . '/pub/media/downloadable/files',
+            $t . '/vendor/magento/sample-data-media/catalog/product' => $t . '/pub/media/catalog/product',
+            $t . '/vendor/magento/sample-data-media/downloadable/files' => $t . '/pub/media/downloadable/files',
         ];
         foreach ($pairs as $from => $to) {
             if (is_dir($from) && !is_dir($to)) {

@@ -3,10 +3,10 @@
     "order": 20,
     "default": true,
     "name": "Normal",
-    "tagline": "Mage-OS completo, così come viene rilasciato",
-    "description": "Installazione standard di Mage-OS con tutti i moduli del core, MSI incluso. Nessun extra e nessuna rimozione: ideale come punto di partenza neutro.",
+    "tagline": "Magento Open Source base, così come viene rilasciato",
+    "description": "Installazione standard di Magento Open Source con tutti i moduli del core, MSI incluso. Nessun extra e nessuna rimozione: ideale come punto di partenza neutro.",
     "highlights": [
-        "Tutti i moduli del core Mage-OS",
+        "Tutti i moduli del core Magento Open Source",
         "Nessuna credenziale richiesta"
     ],
     "defaults": {
