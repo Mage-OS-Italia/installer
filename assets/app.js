@@ -69,6 +69,14 @@
 
   /** Moduli Mage-OS scelti dall'elenco (esclusi quelli già inclusi dalla distro). */
   const distroPackageNames = () => (distro()?.packages || []).filter((p) => p.required).map((p) => p.name);
+  /** Confronta versioni Magento tipo 2.4.7-p3 (la patch conta solo a parità di release). */
+  const vcmp = (a, b) => {
+    const p = (v) => { const [base, patch] = v.split('-p'); return [...base.split('.').map(Number), Number(patch || 0)]; };
+    const x = p(a), y = p(b);
+    for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0);
+    return 0;
+  };
+  const tooOld = (m) => !!m.min_magento && vcmp(S.f.version, m.min_magento) < 0;
   const isIncompatible = (m) => (m.incompatible_with || []).includes(S.f.distro);
   const selectedMageos = () => S.boot.mageos.filter((m) => S.f.mageos.includes(m.name) && !isIncompatible(m) && !distroPackageNames().includes(m.name));
 
@@ -218,17 +226,25 @@
       ${actions(false, true)}`;
   }
 
+  /** Avviso se tra i moduli scelti ce n'è uno che non gira sulla versione di Magento selezionata. */
+  function mageosWarning() {
+    const old = selectedMageos().filter(tooOld);
+    if (!old.length) return '';
+    return `<div class="notice" style="margin:0 0 14px"><b>Versione di Magento troppo vecchia per ${old.map((m) => esc(m.label)).join(', ')}.</b> ${old.length === 1 ? 'Richiede' : 'Richiedono'} Magento ${esc(old.reduce((a, m) => (vcmp(m.min_magento, a) > 0 ? m.min_magento : a), '0'))} o successivo: con la versione ${esc(S.f.version)} composer segnalerebbe un conflitto e l'installazione si fermerebbe. Scegli una versione più recente o deseleziona il modulo.</div>`;
+  }
+
   /** Elenco dei moduli Mage-OS opzionali, raggruppati per area. */
   function mageosList() {
     const own = distroPackageNames();
     const groups = [...new Set(S.boot.mageos.map((m) => m.group))];
     return `<h3>Moduli Mage-OS</h3>
+      <div id="mageos-warn">${mageosWarning()}</div>
       <p class="muted" style="margin:-6px 0 12px;font-size:13px">Moduli opzionali della community Mage-OS, installabili con qualsiasi distro (da Packagist, senza credenziali).</p>
       ${groups.map((g) => `<div class="group"><h4 class="pkg-group">${esc(g)}</h4><div class="pkg-list">
         ${S.boot.mageos.filter((m) => m.group === g).map((m) => {
           const included = own.includes(m.name);
           const off = isIncompatible(m);
-          return `<label class="check" ${off || included ? 'style="opacity:.6"' : ''}><input type="checkbox" data-mageos="${esc(m.name)}" ${included || S.f.mageos.includes(m.name) ? 'checked' : ''} ${off || included ? 'disabled' : ''}><span><b>${esc(m.label)}</b>${included ? ' <span class="chip">incluso nella distro</span>' : ''}${off ? ' <span class="chip">non disponibile con questa distro</span>' : ''}<small>${esc(m.description)} · <code>${esc(m.name)}</code></small></span></label>`;
+          return `<label class="check" ${off || included ? 'style="opacity:.6"' : ''}><input type="checkbox" data-mageos="${esc(m.name)}" ${included || S.f.mageos.includes(m.name) ? 'checked' : ''} ${off || included ? 'disabled' : ''}><span><b>${esc(m.label)}</b>${included ? ' <span class="chip">incluso nella distro</span>' : ''}${off ? ' <span class="chip">non disponibile con questa distro</span>' : ''}${tooOld(m) ? ` <span class="chip">richiede Magento ${esc(m.min_magento)}+</span>` : ''}<small>${esc(m.description)} · <code>${esc(m.name)}</code></small></span></label>`;
         }).join('')}
       </div></div>`).join('')}`;
   }
@@ -411,6 +427,7 @@
         <section><h4>Amministratore</h4><dl>${row('Nome', esc(f.admin_firstname + ' ' + f.admin_lastname))}${row('Email', esc(f.admin_email))}${row('Username', esc(f.admin_user))}${row('Password', '••••••••')}</dl></section>
       </div>
       ${pk.length ? `<h3>Pacchetti che verranno installati</h3><div class="chips">${pk.map((p) => `<span class="chip">${esc(p.name)}</span>`).join('')}</div>` : ''}
+      ${mageosWarning() ? `<div style="margin-top:20px">${mageosWarning()}</div>` : ''}
       <div id="start-err"></div>
       <div class="actions"><button class="btn" data-nav="back">← Indietro</button><div class="right"><button class="btn primary" data-act="start" style="padding:13px 26px;font-size:16px">🚀 Installa Magento</button></div></div>`;
   }
@@ -571,6 +588,7 @@
     $$('[data-mageos]', scope).forEach((el) => el.addEventListener('change', () => {
       const n = el.dataset.mageos;
       S.f.mageos = el.checked ? [...new Set([...S.f.mageos, n])] : S.f.mageos.filter((x) => x !== n);
+      const w = $('#mageos-warn'); if (w) w.innerHTML = mageosWarning();
     }));
     $$('[data-pkg]', scope).forEach((el) => el.addEventListener('change', () => {
       const n = el.dataset.pkg;

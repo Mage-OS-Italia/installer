@@ -20,7 +20,7 @@ Sono file JSON in `distros/`:
 | `italiana` | Come `normal` + lingua it_IT, EUR, Europe/Rome, modulo Resi (RMA) di Mage-OS, IVA italiana preselezionata e moduli Threecommerce a scelta (richiede credenziali di `repo.threecommerce.it`) |
 
 ## Moduli Mage-OS e IVA italiana
-- `catalog/mageos.json` elenca i moduli Mage-OS selezionabili con qualsiasi distro (da Packagist). `incompatible_with` esclude un modulo da certe distro (es. SEO e FAQ richiedono MSI, quindi non vanno con `light`).
+- `catalog/mageos.json` elenca i moduli Mage-OS selezionabili con qualsiasi distro (da Packagist). `incompatible_with` esclude un modulo da certe distro (es. SEO e FAQ richiedono MSI, quindi non vanno con `light`); `min_magento` fa comparire un avviso se la versione scelta è troppo vecchia.
 - L'opzione «regole IVA italiane» imposta prezzi IVA inclusa e crea le regole 22% (classe Taxable Goods), 10% e 4% (classi «IVA ridotta»). Il calcolo segue l'indirizzo di spedizione: per altri paesi UE servono le rispettive aliquote.
 
 ## Uso

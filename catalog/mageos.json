@@ -14,7 +14,8 @@
         "description": "Domande frequenti con gestione in admin, widget e contenuto Page Builder. Installa anche il modulo SEO.",
         "incompatible_with": [
             "light"
-        ]
+        ],
+        "min_magento": "2.4.7"
     },
     {
         "name": "mage-os/module-seo",
@@ -24,7 +25,8 @@
         "description": "Dati strutturati JSON-LD, meta tag e gestione dei canonical. Richiede MSI: non disponibile con la distro Light.",
         "incompatible_with": [
             "light"
-        ]
+        ],
+        "min_magento": "2.4.7"
     },
     {
         "name": "mage-os/module-hreflang",
@@ -59,7 +61,8 @@
         "constraint": "^1.2",
         "group": "SEO e marketing",
         "label": "Feed prodotti",
-        "description": "Feed per Google Shopping e altri comparatori."
+        "description": "Feed per Google Shopping e altri comparatori.",
+        "min_magento": "2.4.7"
     },
     {
         "name": "mage-os/module-rma",
