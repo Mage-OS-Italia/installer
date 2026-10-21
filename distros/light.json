@@ -3,9 +3,9 @@
     "order": 10,
     "name": "Light",
     "tagline": "Magento Open Source essenziale, senza i moduli superflui",
-    "description": "Magento Open Source senza i moduli che un negozio standard non usa: MSI (inventario multi-sorgente), quasi tutti i moduli GraphQL, DHL, FedEx, New Relic, analytics e simili. Meno codice da caricare, indicizzare e aggiornare. Nessun modulo di terze parti.",
+    "description": "Magento Open Source senza i moduli che un negozio standard non usa: MSI (inventario multi-sorgente), quasi tutti i moduli GraphQL, DHL, FedEx, New Relic, Adobe IMS e Adobe Stock, Braintree, analytics e simili. Meno codice da caricare, indicizzare e aggiornare. Nessun modulo di terze parti.",
     "highlights": [
-        "108 pacchetti Magento esclusi dall'installazione",
+        "130 pacchetti esclusi dall'installazione (MSI, GraphQL superflui, Adobe IMS e Stock, Braintree…)",
         "Stock classico (senza MSI), ricerca OpenSearch/Elasticsearch",
         "Nessuna credenziale richiesta"
     ],
@@ -17,6 +17,20 @@
     "repositories": [],
     "packages": [],
     "replace": [
+        "adobe-commerce/adobe-ims-metapackage",
+        "magento/adobe-stock-integration",
+        "magento/module-admin-adobe-ims",
+        "magento/module-admin-adobe-ims-two-factor-auth",
+        "magento/module-adobe-ims",
+        "magento/module-adobe-ims-api",
+        "magento/module-adobe-stock-admin-ui",
+        "magento/module-adobe-stock-asset",
+        "magento/module-adobe-stock-asset-api",
+        "magento/module-adobe-stock-client",
+        "magento/module-adobe-stock-client-api",
+        "magento/module-adobe-stock-image",
+        "magento/module-adobe-stock-image-admin-ui",
+        "magento/module-adobe-stock-image-api",
         "magento/module-application-performance-monitor-new-relic",
         "magento/module-authorizenet-graph-ql",
         "magento/module-braintree-graph-ql",
@@ -124,7 +138,15 @@
         "magento/module-tax-graph-ql",
         "magento/module-theme-graph-ql",
         "magento/module-vault-graph-ql",
-        "magento/module-weee-graph-ql"
+        "magento/module-weee-graph-ql",
+        "paypal/module-braintree",
+        "paypal/module-braintree-core",
+        "paypal/module-braintree-customer-balance",
+        "paypal/module-braintree-gift-card",
+        "paypal/module-braintree-gift-card-account",
+        "paypal/module-braintree-gift-wrapping",
+        "paypal/module-braintree-graph-ql",
+        "paypal/module-braintree-reward"
     ],
     "config": {}
 }

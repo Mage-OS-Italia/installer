@@ -15,7 +15,7 @@ Sono file JSON in `distros/`:
 
 | Distro | Contenuto |
 |---|---|
-| `light` | Magento Open Source senza 108 pacchetti non necessari (MSI, GraphQL superflui, DHL, FedEx, New Relic, analytics…) tramite `replace` |
+| `light` | Magento Open Source senza 130 pacchetti non necessari (MSI, GraphQL superflui, DHL, FedEx, New Relic, Adobe IMS e Stock, Braintree, analytics…) tramite `replace` |
 | `normal` | Magento Open Source base, senza extra |
 | `italiana` | Come `normal` + lingua it_IT, EUR, Europe/Rome, modulo Resi (RMA) di Mage-OS, IVA italiana preselezionata e moduli Threecommerce a scelta (richiede credenziali di `repo.threecommerce.it`) |
 
