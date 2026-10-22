@@ -5,6 +5,7 @@ const APP_NAME = 'Magento Installer';
 const APP_VERSION = '0.2.0';
 /** Mirror pubblico dei pacchetti Magento Open Source (stessi pacchetti di repo.magento.com, nessuna chiave Adobe). */
 const MAGENTO_REPO = 'https://mirror.mage-os.org/';
+const MAGEOS_REPO = 'https://repo.mage-os.org/';
 
 define('APP_ROOT', dirname(__DIR__));
 

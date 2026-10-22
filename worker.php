@@ -58,7 +58,7 @@ final class Worker
         $steps = [];
         foreach (self::STEPS as $sid => $label) {
             if ($sid === 'download') {
-                $label = 'Download di Magento Open Source ' . $this->cfg['version'];
+                $label = 'Download di ' . platform_of($this->cfg['platform'])['name'] . ' ' . $this->cfg['version'];
             }
             $steps[] = ['id' => $sid, 'label' => $label, 'state' => 'pending', 'detail' => '', 'progress' => null];
         }
@@ -68,7 +68,7 @@ final class Worker
 
     public function main(): int
     {
-        $this->log(APP_NAME . ' ' . APP_VERSION . ' · Magento Open Source ' . $this->cfg['version'] . ' · distro "' . $this->cfg['distro'] . '"');
+        $this->log(APP_NAME . ' ' . APP_VERSION . ' · ' . platform_of($this->cfg['platform'])['name'] . ' ' . $this->cfg['version'] . ' · distro "' . $this->cfg['distro'] . '"');
         $this->log('Destinazione: ' . $this->cfg['target']);
         try {
             $this->step('preflight', fn() => $this->preflight());
@@ -120,7 +120,7 @@ final class Worker
         $this->dbVersion = $vm[1] ?? '';
         if (!db_is_supported($this->dbIsMaria, $this->dbVersion)) {
             if (!$c['allow_unsupported_db']) {
-                throw new StepFailure(($this->dbIsMaria ? 'MariaDB ' : 'MySQL ') . $this->dbVersion . ' non è supportato da Magento.');
+                throw new StepFailure(($this->dbIsMaria ? 'MariaDB ' : 'MySQL ') . $this->dbVersion . ' non è supportato da ' . platform_of($c['platform'])['name'] . '.');
             }
             $this->log('⚠ ' . ($this->dbIsMaria ? 'MariaDB ' : 'MySQL ') . $this->dbVersion . ' non è nell\'elenco ufficiale: procedo su richiesta (solo sviluppo).');
         }
@@ -187,12 +187,13 @@ final class Worker
     private function download(): void
     {
         $c = $this->cfg;
+        $pl = platform_of($c['platform']);
         $parent = dirname($c['target']);
         if (!is_dir($parent) && !@mkdir($parent, 0775, true)) {
             throw new StepFailure("Impossibile creare $parent");
         }
-        $cmd = $this->composerBase['cmd'] . ' create-project --repository-url=' . escapeshellarg(MAGENTO_REPO)
-            . ' magento/project-community-edition ' . escapeshellarg($c['target']) . ' ' . escapeshellarg($c['version'])
+        $cmd = $this->composerBase['cmd'] . ' create-project --repository-url=' . escapeshellarg($pl['repo'])
+            . ' ' . $pl['vendor'] . '/project-community-edition ' . escapeshellarg($c['target']) . ' ' . escapeshellarg($c['version'])
             . ' --no-interaction --no-progress --no-ansi --prefer-dist --no-audit --no-install';
         $code = $this->run($cmd, $parent, $this->composerBase['env']);
         if ($code !== 0 || !is_file($c['target'] . '/composer.json')) {
@@ -248,7 +249,7 @@ final class Worker
             $require[$n] = $v;
         }
         if ($c['sample_data']) {
-            foreach (sample_data_packages() as $spec) {
+            foreach (sample_data_packages($c['platform'], $c['version']) as $spec) {
                 [$n, $v] = explode(':', $spec, 2);
                 $require[$n] = $v;
             }
@@ -257,7 +258,7 @@ final class Worker
             $json['require'][$n] = $v;
         }
         if ($c['replace']) {
-            $this->log(count($c['replace']) . ' pacchetti Magento esclusi tramite "replace".');
+            $this->log(count($c['replace']) . ' pacchetti esclusi tramite "replace".');
         }
         if ($require) {
             $this->log('Pacchetti aggiunti: ' . implode(', ', array_keys($require)));
@@ -476,9 +477,10 @@ final class Worker
     private function fixSampleMedia(): void
     {
         $t = $this->cfg['target'];
+        $media = $t . '/vendor/' . platform_of($this->cfg['platform'])['vendor'] . '/sample-data-media';
         $pairs = [
-            $t . '/vendor/magento/sample-data-media/catalog/product' => $t . '/pub/media/catalog/product',
-            $t . '/vendor/magento/sample-data-media/downloadable/files' => $t . '/pub/media/downloadable/files',
+            $media . '/catalog/product' => $t . '/pub/media/catalog/product',
+            $media . '/downloadable/files' => $t . '/pub/media/downloadable/files',
         ];
         foreach ($pairs as $from => $to) {
             if (is_dir($from) && !is_dir($to)) {

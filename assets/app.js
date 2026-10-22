@@ -52,7 +52,10 @@
     return p.split('').sort(() => crypto.getRandomValues(new Uint8Array(1))[0] - 128).join('');
   }
 
-  const version = () => S.boot.versions.find((v) => v.version === S.f.version);
+  const platform = () => S.boot.platforms[S.f.platform];
+  const pname = () => platform().name;
+  const version = () => platform().versions.find((v) => v.version === S.f.version);
+  const defaultName = () => (S.f.platform === 'mageos' ? 'mage-os' : 'magento') + '-store';
   const distro = () => S.boot.distros.find((d) => d.id === S.f.distro);
   const phpHuman = (c) => (c || 'n/d').replace(/\|\|/g, ' · ').replace(/~?(\d+\.\d+)\.0/g, '$1.x');
 
@@ -76,7 +79,7 @@
     for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0);
     return 0;
   };
-  const tooOld = (m) => !!m.min_magento && vcmp(S.f.version, m.min_magento) < 0;
+  const tooOld = (m) => S.f.platform === 'magento' && !!m.min_magento && vcmp(S.f.version, m.min_magento) < 0;
   const isIncompatible = (m) => (m.incompatible_with || []).includes(S.f.distro);
   const selectedMageos = () => S.boot.mageos.filter((m) => S.f.mageos.includes(m.name) && !isIncompatible(m) && !distroPackageNames().includes(m.name));
 
@@ -110,10 +113,10 @@
       return;
     }
     S.boot = b;
-    const latest = b.versions[0];
+    const latest = b.platforms.magento.versions[0];
     const parent = (b.server.parent_dir || '').replace(/\/+$/, '');
     S.f = {
-      version: latest.version, distro: (b.distros.find((d) => d.default) || b.distros[0])?.id || 'normal', packages: [], mageos: [], sample_data: false, italian_tax: false,
+      platform: 'magento', version: latest.version, distro: (b.distros.find((d) => d.default) || b.distros[0])?.id || 'normal', packages: [], mageos: [], sample_data: false, italian_tax: false,
       target: parent + '/magento-store', base_url: '', store_name: 'Magento Store', backend_frontname: 'admin',
       language: 'it_IT', currency: 'EUR', timezone: 'Europe/Rome',
       db_host: 'localhost', db_name: '', db_user: 'root', db_password: '', db_prefix: '', create_db: true, cleanup_db: false,
@@ -145,9 +148,12 @@
     const v = version();
     const s = S.boot.server;
     $('#side-info').innerHTML = `
-      <h3>Cos'è Magento Open Source</h3>
-      <p>La piattaforma ecommerce open source di Adobe. L'installer scarica i pacchetti ufficiali dal mirror pubblico <code>mirror.mage-os.org</code>: non servono chiavi Marketplace. I moduli opzionali arrivano da <a href="https://mage-os.org" target="_blank" rel="noopener">Mage-OS</a>.</p>
-      <div class="links"><a href="https://developer.adobe.com/commerce/docs/" target="_blank" rel="noopener">Documentazione</a><a href="https://github.com/magento/magento2" target="_blank" rel="noopener">GitHub</a></div>
+      <h3>Cos'è ${esc(pname())}</h3>
+      ${S.f.platform === 'mageos'
+        ? `<p>Distribuzione community-driven di Magento Open Source: stesso ecosistema, aggiornamenti rilasciati dalla community e pacchetti su <code>repo.mage-os.org</code>.</p>
+      <div class="links"><a href="https://mage-os.org" target="_blank" rel="noopener">mage-os.org</a><a href="https://github.com/mage-os" target="_blank" rel="noopener">GitHub</a></div>`
+        : `<p>La piattaforma ecommerce open source di Adobe. L'installer scarica i pacchetti ufficiali dal mirror pubblico <code>mirror.mage-os.org</code>: non servono chiavi Marketplace. I moduli opzionali arrivano da <a href="https://mage-os.org" target="_blank" rel="noopener">Mage-OS</a>.</p>
+      <div class="links"><a href="https://developer.adobe.com/commerce/docs/" target="_blank" rel="noopener">Documentazione</a><a href="https://github.com/magento/magento2" target="_blank" rel="noopener">GitHub</a></div>`}
       <h3 style="margin-top:16px">Release selezionata</h3>
       <dl><dt>Versione</dt><dd>${esc(v?.version)}</dd><dt>PHP</dt><dd>${esc(phpHuman(v?.php))}</dd>${v?.time ? `<dt>Rilascio</dt><dd>${esc(v.time)}</dd>` : ''}</dl>
       <h3>Questo server</h3>
@@ -188,15 +194,17 @@
   function step0() {
     const v = version();
     const d = distro();
-    const opts = S.boot.versions.map((x, i) => [x.version, x.version + (i === 0 ? ' — ultima' : '')]);
+    const pl = platform();
+    const opts = pl.versions.map((x, i) => [x.version, x.version + (i === 0 ? ' — ultima' : '')]);
     const optional = (d?.packages || []).filter((p) => !p.required);
     const required = (d?.packages || []).filter((p) => p.required);
     return `
       <h2>Benvenuto 👋</h2>
-      <p class="lead">Scegli la versione di Magento Open Source e la distro: l'installer scarica tutto, configura il database e crea il negozio.</p>
-      ${!['live', 'cache'].includes(S.boot.versions_source) ? `<div class="notice" style="margin:0 0 18px">Elenco versioni ${S.boot.versions_source === 'fallback' ? 'minimo (il repository Magento non è raggiungibile)' : 'dall\'ultima copia salvata (il repository Magento non è raggiungibile)'}.</div>` : ''}
+      <p class="lead">Scegli cosa installare, la versione e la distro: l'installer scarica tutto, configura il database e crea il negozio.</p>
+      ${!['live', 'cache'].includes(pl.source) ? `<div class="notice" style="margin:0 0 18px">Elenco versioni ${pl.source === 'fallback' ? 'minimo (il repository di ' + esc(pl.name) + ' non è raggiungibile)' : 'dall\'ultima copia salvata (il repository di ' + esc(pl.name) + ' non è raggiungibile)'}.</div>` : ''}
       <div class="grid">
-        ${select('Versione di Magento Open Source', 'version', opts)}
+        ${select('Cosa vuoi installare', 'platform', Object.values(S.boot.platforms).map((x) => [x.id, x.name]), { hint: S.f.platform === 'mageos' ? 'Distribuzione community di Magento, con aggiornamenti della community.' : 'Il Magento Open Source ufficiale.' })}
+        ${select('Versione di ' + esc(pname()), 'version', opts)}
         <div class="field"><span>Requisiti di questa versione</span><div class="chips" style="margin-top:4px"><span class="chip accent">PHP ${esc(phpHuman(v.php))}</span>${v.time ? `<span class="chip">rilasciata ${esc(v.time)}</span>` : ''}</div></div>
       </div>
 
@@ -254,7 +262,7 @@
     S.reqLoading = true;
     S.req = null;
     renderStep();
-    const r = await api('requirements', { version: S.f.version, distro: S.f.distro, packages: S.f.packages, target: S.f.target });
+    const r = await api('requirements', { platform: S.f.platform, version: S.f.version, distro: S.f.distro, packages: S.f.packages, target: S.f.target });
     S.reqLoading = false;
     S.req = r;
     if (S.step === 1) renderStep();
@@ -262,7 +270,7 @@
 
   function step1() {
     if (S.reqLoading || !S.req) {
-      return `<h2>Requisiti del server</h2><p class="lead">Controllo in corso per Magento ${esc(S.f.version)}…</p><div class="boot" style="padding:40px"><div class="spinner"></div></div>${actions(true, false)}`;
+      return `<h2>Requisiti del server</h2><p class="lead">Controllo in corso per ${esc(pname())} ${esc(S.f.version)}…</p><div class="boot" style="padding:40px"><div class="spinner"></div></div>${actions(true, false)}`;
     }
     const r = S.req;
     if (r.error) return `<h2>Requisiti del server</h2><p class="err">${esc(r.error)}</p>${actions(true, false)}`;
@@ -272,7 +280,7 @@
       : r.warnings ? `<b>Tutto a posto per procedere</b>, con ${r.warnings} avvis${r.warnings === 1 ? 'o' : 'i'} da valutare.` : '<b>Il server soddisfa tutti i requisiti.</b>';
     return `
       <h2>Requisiti del server</h2>
-      <p class="lead">Verifica per Magento ${esc(S.f.version)} — PHP ${esc(phpHuman(r.version?.php))}.</p>
+      <p class="lead">Verifica per ${esc(pname())} ${esc(S.f.version)} — PHP ${esc(phpHuman(r.version?.php))}.</p>
       <div class="summary-bar ${cls}"><span style="font-size:22px">${r.blocking ? '⛔' : r.warnings ? '⚠️' : '✅'}</span><div style="flex:1">${msg}</div><button class="btn small" data-act="recheck">Ricontrolla</button></div>
       ${r.groups.map((g) => `<div class="group"><h3>${esc(g.title)}</h3><div class="group-box">${g.checks.map((c) => `
         <div class="req ${c.status}"><span class="ico">${c.status === 'ok' ? '✓' : c.status === 'warn' ? '!' : '✕'}</span>
@@ -310,7 +318,7 @@
   function step2() {
     return `
       <h2>Database e ricerca</h2>
-      <p class="lead">Magento usa MySQL o MariaDB per i dati e OpenSearch o Elasticsearch per catalogo e ricerca.</p>
+      <p class="lead">${esc(pname())} usa MySQL o MariaDB per i dati e OpenSearch o Elasticsearch per catalogo e ricerca.</p>
       <h3 style="margin-top:0">Database</h3>
       <div class="grid">
         ${field('Host', 'db_host', { ph: 'localhost', hint: 'Anche host:porta o percorso del socket.' })}
@@ -419,7 +427,7 @@
       <h2>Riepilogo</h2>
       <p class="lead">Controlla i dati: quando premi <b>Installa</b> parte il download e la configurazione. Puoi lasciare la pagina aperta e seguire il log in diretta.</p>
       <div class="recap">
-        <section><h4>Magento</h4><dl>${row('Versione', esc(v.version))}${row('Distro', esc(d.name))}${row('Moduli extra', pk.length)}${row('Dati di esempio', f.sample_data ? 'sì' : 'no')}${row('IVA italiana', f.italian_tax ? 'sì' : 'no')}${row('Modalità', esc(f.deploy_mode))}</dl></section>
+        <section><h4>${esc(pname())}</h4><dl>${row('Versione', esc(v.version))}${row('Distro', esc(d.name))}${row('Moduli extra', pk.length)}${row('Dati di esempio', f.sample_data ? 'sì' : 'no')}${row('IVA italiana', f.italian_tax ? 'sì' : 'no')}${row('Modalità', esc(f.deploy_mode))}</dl></section>
         <section><h4>Destinazione</h4><dl>${row('Cartella', esc(f.target))}${row('Base URL', esc(f.base_url))}${row('Admin', esc('/' + f.backend_frontname))}</dl></section>
         <section><h4>Database</h4><dl>${row('Server', esc((S.db?.server || '') + ' ' + (S.db?.version || '')))}${row('Host', esc(f.db_host))}${row('Database', esc(f.db_name))}${row('Utente', esc(f.db_user))}${row('Svuota', f.cleanup_db ? 'sì' : 'no')}</dl></section>
         <section><h4>Ricerca</h4><dl>${row('Motore', esc(f.search_engine))}${row('Host', esc(f.search_host + ':' + f.search_port))}${row('Prefisso', esc(f.search_prefix))}</dl></section>
@@ -429,7 +437,7 @@
       ${pk.length ? `<h3>Pacchetti che verranno installati</h3><div class="chips">${pk.map((p) => `<span class="chip">${esc(p.name)}</span>`).join('')}</div>` : ''}
       ${mageosWarning() ? `<div style="margin-top:20px">${mageosWarning()}</div>` : ''}
       <div id="start-err"></div>
-      <div class="actions"><button class="btn" data-nav="back">← Indietro</button><div class="right"><button class="btn primary" data-act="start" style="padding:13px 26px;font-size:16px">🚀 Installa Magento</button></div></div>`;
+      <div class="actions"><button class="btn" data-nav="back">← Indietro</button><div class="right"><button class="btn primary" data-act="start" style="padding:13px 26px;font-size:16px">🚀 Installa ${esc(pname())}</button></div></div>`;
   }
 
   async function startInstall(btn) {
@@ -440,7 +448,7 @@
     const r = await api('start', payload);
     if (r.error) {
       btn.disabled = false;
-      btn.textContent = '🚀 Installa Magento';
+      btn.textContent = '🚀 Installa ' + pname();
       $('#start-err').innerHTML = `<div class="notice" style="margin-top:20px;border-color:rgba(248,113,113,.5);background:rgba(248,113,113,.08);color:#fecaca"><b>${esc(r.error)}</b>${(r.errors || []).length ? `<ul style="margin:6px 0 0;padding-left:20px">${r.errors.map((e) => `<li>${esc(e)}</li>`).join('')}</ul>` : ''}</div>`;
       return;
     }
@@ -451,7 +459,7 @@
   function jobShell() {
     return `
       <h2>Installazione in corso</h2>
-      <p class="lead" id="job-lead">Magento ${esc(S.f.version)} · ${esc(S.f.target)}</p>
+      <p class="lead" id="job-lead">${esc(pname())} ${esc(S.f.version)} · ${esc(S.f.target)}</p>
       <div class="progress-top"><div class="bar"><i id="job-bar"></i></div><b id="job-pct">0%</b></div>
       <div class="tasks" id="job-tasks"></div>
       <div id="job-result"></div>
@@ -542,7 +550,7 @@
       const r = st.result;
       $('#job-lead').textContent = 'Fatto!';
       out.innerHTML = `
-        <div class="success"><div class="big">🎉</div><h2 style="margin:0 0 4px">Magento ${esc(r.version)} è installato</h2><p class="muted">Tempo totale: ${Math.floor(r.duration / 60)} min ${r.duration % 60} s · modalità ${esc(r.mode)}</p></div>
+        <div class="success"><div class="big">🎉</div><h2 style="margin:0 0 4px">${esc(pname())} ${esc(r.version)} è installato</h2><p class="muted">Tempo totale: ${Math.floor(r.duration / 60)} min ${r.duration % 60} s · modalità ${esc(r.mode)}</p></div>
         <div class="links-grid">
           <div class="link-card"><small>Negozio</small><div class="v"><a href="${esc(r.storefront)}" target="_blank" rel="noopener">${esc(r.storefront)}</a></div></div>
           <div class="link-card"><small>Pannello admin</small><div class="v"><a href="${esc(r.admin)}" target="_blank" rel="noopener">${esc(r.admin)}</a></div></div>
@@ -577,6 +585,13 @@
         S.touched[k] = true;
         if (k === 'target') { S.req = null; syncDerived(); }
         if (k === 'version') { S.req = null; S.db = null; S.search = null; renderSide(); renderStep(); return; }
+        if (k === 'platform') {
+          S.f.version = platform().versions[0].version;
+          if (!S.touched.target) S.f.target = S.f.target.replace(/[^/]*$/, defaultName());
+          if (!S.touched.store_name) S.f.store_name = pname() + ' Store';
+          S.touched.platform = false;
+          S.req = null; S.db = null; S.search = null; syncDerived(); renderSide(); renderStep(); return;
+        }
         if (['db_host', 'db_name', 'db_user', 'db_password'].includes(k)) { S.db = null; const b = $('#db-test'); if (b) b.hidden = true; const ub = $('#unsupported-box'); if (ub) ub.innerHTML = ''; }
         if (k.startsWith('search_') && k !== 'search_engine') { S.search = null; const b = $('#search-test'); if (b) b.hidden = true; }
         if (k === 'cleanup_db' || k === 'allow_unsupported_db') updateNext();

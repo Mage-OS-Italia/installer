@@ -73,9 +73,13 @@ if ($action !== '') {
 
     switch ($action) {
         case 'bootstrap':
-            $v = magento_versions();
+            $platforms = [];
+            foreach (PLATFORMS as $id => $pl) {
+                $v = platform_versions($id);
+                $platforms[$id] = ['id' => $id, 'name' => $pl['name'], 'versions' => $v['versions'], 'source' => $v['source']];
+            }
             json_out([
-                'versions' => $v['versions'], 'versions_source' => $v['source'],
+                'platforms' => $platforms,
                 'distros' => array_values(distros()),
                 'mageos' => mageos_modules(),
                 'locale' => locale_options(),
@@ -100,7 +104,7 @@ if ($action !== '') {
                     }
                 }
             }
-            json_out(run_requirements(['version' => $in['version'] ?? '', 'target' => $in['target'] ?? '', 'repos' => array_values($repos)]));
+            json_out(run_requirements(['platform' => $in['platform'] ?? '', 'version' => $in['version'] ?? '', 'target' => $in['target'] ?? '', 'repos' => array_values($repos)]));
         case 'test_db':
             json_out(test_db($in));
         case 'test_search':

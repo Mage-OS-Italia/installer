@@ -21,9 +21,13 @@ function validate_install(array $in): array
     $err = [];
     $s = fn(string $k): string => trim((string)($in[$k] ?? ''));
 
-    $version = find_version($s('version'));
+    $platform = platform_of($s('platform'));
+    if (!$platform) {
+        $err[] = 'Piattaforma non valida.';
+    }
+    $version = $platform ? find_version($s('platform'), $s('version')) : null;
     if (!$version) {
-        $err[] = 'Versione di Magento non valida.';
+        $err[] = 'Versione non valida.';
     }
     $distros = distros();
     $distro = $distros[$s('distro')] ?? null;
@@ -156,12 +160,13 @@ function validate_install(array $in): array
     }
 
     $config = [
+        'platform' => $s('platform'),
         'version' => $version['version'] ?? '',
         'distro' => $distro['id'] ?? '',
         'target' => $target,
         'base_url' => $baseUrl,
         'backend_frontname' => $front,
-        'store_name' => $s('store_name') ?: 'Magento Store',
+        'store_name' => $s('store_name') ?: ($platform['name'] ?? 'Magento') . ' Store',
         'language' => $lang, 'currency' => $cur, 'timezone' => $tz,
         'db' => $db,
         'create_db' => !empty($in['create_db']),
@@ -179,7 +184,7 @@ function validate_install(array $in): array
         'repositories' => array_values($repos),
         'credentials' => $credentials,
         'distro_config' => (array)($distro['config'] ?? []),
-        'replace' => array_values(array_filter((array)($distro['replace'] ?? []), fn($n) => is_string($n) && preg_match('#^[a-z0-9_.-]+/[a-z0-9_.-]+$#', $n))),
+        'replace' => array_values(array_filter((array)($distro[$s('platform') === 'mageos' ? 'replace_mageos' : 'replace'] ?? []), fn($n) => is_string($n) && preg_match('#^[a-z0-9_.-]+/[a-z0-9_.-]+$#', $n))),
     ];
     return [$config, $err];
 }

@@ -43,7 +43,8 @@ function composer_info(): array
  */
 function run_requirements(array $p): array
 {
-    $version = find_version((string)($p['version'] ?? ''));
+    $platform = PLATFORMS[$p['platform'] ?? ''] ?? PLATFORMS['magento'];
+    $version = find_version($p['platform'] ?? 'magento', (string)($p['version'] ?? ''));
     $groups = [];
 
     // --- PHP ---
@@ -55,7 +56,7 @@ function run_requirements(array $p): array
     if ($constraint !== '') {
         $php[] = chk('php_web', 'PHP del web server (' . PHP_SAPI . ')', php_satisfies(PHP_VERSION, $constraint) ? 'ok' : 'fail',
             'Installato ' . PHP_VERSION . ' · richiesto ' . $phpHuman,
-            'Usa una versione PHP supportata da Magento ' . ($version['version'] ?? '') . '.');
+            'Usa una versione PHP supportata da ' . $platform['name'] . ' ' . ($version['version'] ?? '') . '.');
     }
     if ($cli) {
         $php[] = chk('php_cli', 'PHP da riga di comando', $constraint === '' || php_satisfies($cli['version'], $constraint) ? 'ok' : 'fail',
@@ -96,7 +97,7 @@ function run_requirements(array $p): array
         $detail = $web && $inCli ? 'Caricata' : (!$web && !$inCli ? 'Mancante (web e CLI)' : (!$web ? 'Mancante nel PHP web' : 'Mancante nel PHP CLI'));
         $ext[] = chk('ext_' . $e, 'ext-' . $e, $status, $detail, $status === 'fail' ? "Installa e abilita l'estensione PHP $e." : '');
     }
-    $groups[] = ['title' => 'Estensioni PHP richieste da Magento ' . ($version['version'] ?? ''), 'checks' => $ext];
+    $groups[] = ['title' => 'Estensioni PHP richieste da ' . $platform['name'] . ' ' . ($version['version'] ?? ''), 'checks' => $ext];
 
     // --- Strumenti ---
     $tools = [];
@@ -140,7 +141,7 @@ function run_requirements(array $p): array
 
     // --- Rete ---
     $net = [];
-    $hosts = [MAGENTO_REPO . 'packages.json' => 'Repository Magento (mirror)', 'https://repo.packagist.org/packages.json' => 'Packagist'];
+    $hosts = [$platform['repo'] . 'packages.json' => 'Repository ' . $platform['name'], 'https://repo.packagist.org/packages.json' => 'Packagist'];
     foreach ((array)($p['repos'] ?? []) as $url) {
         if (is_string($url) && preg_match('#^https://[\w.\-]+(/|$)#', $url)) {
             $hosts[rtrim($url, '/') . '/packages.json'] = parse_url($url, PHP_URL_HOST);

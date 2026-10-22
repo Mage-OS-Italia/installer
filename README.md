@@ -1,9 +1,9 @@
 # Magento Installer
 
-Installer web per Magento Open Source con moduli opzionali di [Mage-OS](https://mage-os.org), nello stile di quello delle prime versioni di Magento 2: si apre dal browser, controlla i requisiti del server e produce un'installazione funzionante.
+Installer web per Magento Open Source oppure [Mage-OS](https://mage-os.org), con moduli opzionali di Mage-OS, nello stile di quello delle prime versioni di Magento 2: si apre dal browser, controlla i requisiti del server e produce un'installazione funzionante.
 
 ## Cosa fa
-1. Sceglie la versione di Magento Open Source (2.4.6 e successive, elenco letto dal mirror `mirror.mage-os.org`, che serve i pacchetti ufficiali senza chiavi Marketplace) e la distro.
+1. Sceglie la piattaforma (Magento Open Source o Mage-OS), la versione e la distro. Le versioni di Magento (2.4.6 e successive) sono lette dal mirror `mirror.mage-os.org`, che serve i pacchetti ufficiali senza chiavi Marketplace; quelle di Mage-OS da `repo.mage-os.org`.
 2. Facoltativo: moduli Mage-OS (blog, resi RMA, SEO…), dati di esempio e regole IVA italiane.
 3. Verifica i requisiti per quella versione: PHP (web e CLI), estensioni, php.ini, Composer, spazio su disco, rete.
 4. Testa database (versioni supportate da Magento) e motore di ricerca (OpenSearch / Elasticsearch).
@@ -15,8 +15,8 @@ Sono file JSON in `distros/`:
 
 | Distro | Contenuto |
 |---|---|
-| `light` | Magento Open Source senza 130 pacchetti non necessari (MSI, GraphQL superflui, DHL, FedEx, New Relic, Adobe IMS e Stock, Braintree, analytics…) tramite `replace` |
-| `normal` | Magento Open Source base, senza extra |
+| `light` | La piattaforma scelta senza i pacchetti non necessari (MSI, GraphQL superflui, DHL, FedEx, New Relic, analytics…; con Magento anche Adobe IMS, Stock e Braintree) tramite `replace` (130 su Magento, 117 su Mage-OS: elenchi `replace` e `replace_mageos`) |
+| `normal` | La piattaforma scelta, base e senza extra |
 | `italiana` | Come `normal` + lingua it_IT, EUR, Europe/Rome, modulo Resi (RMA) di Mage-OS, IVA italiana preselezionata e moduli Threecommerce a scelta (richiede credenziali di `repo.threecommerce.it`) |
 
 ## Moduli Mage-OS e IVA italiana

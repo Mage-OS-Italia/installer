@@ -1,20 +1,35 @@
 <?php
 declare(strict_types=1);
 
-/** Estensioni richieste comunque da Magento, usate se il repository non è raggiungibile. */
+/** Estensioni richieste comunque da Magento/Mage-OS, usate se il repository non è raggiungibile. */
 const FALLBACK_EXTENSIONS = ['bcmath', 'ctype', 'curl', 'dom', 'gd', 'hash', 'iconv', 'intl', 'mbstring', 'openssl', 'pdo_mysql', 'simplexml', 'soap', 'sodium', 'xsl', 'zip'];
 
-/** Prima versione di Magento proposta: le precedenti non girano sui PHP ancora supportati. */
-const MAGENTO_MIN_VERSION = '2.4.6';
+/**
+ * Piattaforme installabili. `min` è la prima versione proposta (le precedenti non girano sui PHP ancora
+ * supportati), `regex` lascia passare solo release e patch ufficiali, niente alpha, beta, RC.
+ */
+const PLATFORMS = [
+    'magento' => ['name' => 'Magento Open Source', 'repo' => MAGENTO_REPO, 'vendor' => 'magento', 'min' => '2.4.6',
+        'regex' => '/^\d+\.\d+\.\d+(-p\d+)?$/', 'fallback' => '2.4.8-p5', 'fallback_php' => '~8.2.0||~8.3.0||~8.4.0'],
+    'mageos' => ['name' => 'Mage-OS', 'repo' => MAGEOS_REPO, 'vendor' => 'mage-os', 'min' => '0.0.0',
+        'regex' => '/^\d+\.\d+\.\d+$/', 'fallback' => '3.6.0', 'fallback_php' => '~8.3.0||~8.4.0||~8.5.0'],
+];
+
+function platform_of(string $id): ?array
+{
+    return PLATFORMS[$id] ?? null;
+}
 
 /**
- * Versioni stabili di Magento Open Source (2.4.x e relative patch -pN) con i requisiti PHP/estensioni,
- * lette dai metadati di magento/product-community-edition (cache 1 ora). Se il repository non risponde
- * si usa l'ultima copia in cache o, in mancanza, un elenco minimo.
+ * Versioni stabili della piattaforma con i relativi requisiti PHP/estensioni, lette dai metadati di
+ * <vendor>/product-community-edition (cache 1 ora). Se il repository non risponde si usa l'ultima copia
+ * in cache o, in mancanza, un elenco minimo.
  */
-function magento_versions(bool $refresh = false): array
+function platform_versions(string $platform, bool $refresh = false): array
 {
-    $cache = app_tmp('cache') . '/versions.json';
+    $p = PLATFORMS[$platform];
+    $pkg = $p['vendor'] . '/product-community-edition';
+    $cache = app_tmp('cache') . "/versions-$platform.json";
     if (!$refresh && is_file($cache) && filemtime($cache) > time() - 3600) {
         $data = json_decode((string)file_get_contents($cache), true);
         if (is_array($data) && $data) {
@@ -22,11 +37,11 @@ function magento_versions(bool $refresh = false): array
         }
     }
 
-    $res = http_get(MAGENTO_REPO . 'p2/magento/product-community-edition.json', 10);
+    $res = http_get($p['repo'] . "p2/$pkg.json", 10);
     $versions = [];
     if ($res['ok'] && $res['code'] === 200) {
         $json = json_decode($res['body'], true);
-        $list = $json['packages']['magento/product-community-edition'] ?? [];
+        $list = $json['packages'][$pkg] ?? [];
         $prev = [];
         foreach ($list as $entry) {
             // Metadati "minified": ogni voce eredita i campi della precedente.
@@ -38,8 +53,7 @@ function magento_versions(bool $refresh = false): array
                 }
             }
             $v = (string)($prev['version'] ?? '');
-            // Solo release e patch ufficiali (2.4.8, 2.4.8-p3): niente alpha, beta, RC.
-            if (!preg_match('/^\d+\.\d+\.\d+(-p\d+)?$/', $v) || version_compare($v, MAGENTO_MIN_VERSION, '<')) {
+            if (!preg_match($p['regex'], $v) || version_compare($v, $p['min'], '<')) {
                 continue;
             }
             $req = $prev['require'] ?? [];
@@ -71,13 +85,16 @@ function magento_versions(bool $refresh = false): array
         }
     }
     return ['source' => 'fallback', 'versions' => [[
-        'version' => '2.4.8-p5', 'php' => '~8.2.0||~8.3.0||~8.4.0', 'extensions' => FALLBACK_EXTENSIONS, 'time' => null,
+        'version' => $p['fallback'], 'php' => $p['fallback_php'], 'extensions' => FALLBACK_EXTENSIONS, 'time' => null,
     ]]];
 }
 
-function find_version(string $v): ?array
+function find_version(string $platform, string $v): ?array
 {
-    foreach (magento_versions()['versions'] as $row) {
+    if (!isset(PLATFORMS[$platform])) {
+        return null;
+    }
+    foreach (platform_versions($platform)['versions'] as $row) {
         if ($row['version'] === $v) {
             return $row;
         }
@@ -110,16 +127,21 @@ function distros(): array
     return $out;
 }
 
-/** Pacchetti dei dati di esempio: hanno una numerazione propria, quindi composer sceglie l'ultima compatibile. */
-function sample_data_packages(): array
+/**
+ * Pacchetti dei dati di esempio. Magento li numera a parte, quindi composer sceglie l'ultima compatibile;
+ * Mage-OS li pubblica alla stessa versione della release.
+ */
+function sample_data_packages(string $platform, string $version): array
 {
     $mods = ['bundle', 'catalog-rule', 'catalog', 'cms', 'configurable', 'customer', 'downloadable', 'grouped-product', 'msrp',
         'offline-shipping', 'product-links', 'review', 'sales-rule', 'sales', 'swatches', 'tax', 'theme', 'widget', 'wishlist'];
+    $vendor = PLATFORMS[$platform]['vendor'];
+    $constraint = $platform === 'mageos' ? $version : '*';
     $pkgs = [];
     foreach ($mods as $m) {
-        $pkgs[] = "magento/module-$m-sample-data:*";
+        $pkgs[] = "$vendor/module-$m-sample-data:$constraint";
     }
-    $pkgs[] = 'magento/sample-data-media:*';
+    $pkgs[] = "$vendor/sample-data-media:$constraint";
     return $pkgs;
 }
 
