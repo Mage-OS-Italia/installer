@@ -174,7 +174,6 @@ function http_get(string $url, int $timeout = 8, array $headers = [], bool $head
     $body = curl_exec($ch);
     $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
     $err = curl_error($ch);
-    curl_close($ch);
     return ['ok' => $body !== false && $code > 0, 'code' => $code, 'body' => is_string($body) ? $body : '', 'error' => $err];
 }
 

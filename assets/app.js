@@ -380,7 +380,7 @@
         ${field('Email', 'admin_email', { type: 'email' })}
         ${field('Username', 'admin_user')}
         <div class="field full"><span>Password</span>
-          <div class="input-row"><input type="password" data-k="admin_password" value="${esc(S.f.admin_password)}" autocomplete="new-password"><button class="btn small" data-act="toggle-pw" type="button">Mostra</button><button class="btn small" data-act="gen-pw" type="button">Genera</button></div>
+          <div class="input-row"><input type="password" data-k="admin_password" value="${esc(S.f.admin_password)}" autocomplete="new-password"><button class="btn small" data-act="gen-pw" type="button">Genera</button></div>
           <small>Almeno 7 caratteri con lettere e numeri. Salvala: non verrà mostrata di nuovo.</small></div>
       </div>
 
@@ -576,7 +576,31 @@
     if (S.step === 2) btn.disabled = !step2Ok();
   }
 
+  const EYE = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+  const EYE_OFF = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.9 10.9 0 0 1 12 19C5 19 1 12 1 12a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.1 9.1 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg>';
+
+  /** Mostra o nasconde il contenuto di un campo password e aggiorna l'occhio accanto. */
+  function setPwVisible(input, visible) {
+    input.type = visible ? 'text' : 'password';
+    const b = input.parentElement.querySelector('.pw-eye');
+    if (b) { b.innerHTML = visible ? EYE_OFF : EYE; b.title = b.ariaLabel = visible ? 'Nascondi la password' : 'Mostra la password'; }
+  }
+
+  /** Affianca a ogni campo password l'occhio per vederla. */
+  function addPwEyes(scope) {
+    $$('input[type=password]', scope).forEach((el) => {
+      if (el.parentElement.classList.contains('pw-wrap')) return;
+      const wrap = document.createElement('span');
+      wrap.className = 'pw-wrap';
+      el.replaceWith(wrap);
+      wrap.append(el);
+      wrap.insertAdjacentHTML('beforeend', '<button type="button" class="pw-eye" data-act="toggle-eye"></button>');
+      setPwVisible(el, false);
+    });
+  }
+
   function bind(scope) {
+    addPwEyes(scope);
     $$('[data-k]', scope).forEach((el) => {
       const k = el.dataset.k;
       const handler = () => {
@@ -645,8 +669,8 @@
       case 'recheck': S.req = null; runRequirements(); break;
       case 'test-db': testDb(); break;
       case 'test-search': S.touched.search_engine = true; testSearch(false); break;
-      case 'gen-pw': { S.f.admin_password = genPassword(); const i = $('[data-k=admin_password]'); i.value = S.f.admin_password; i.type = 'text'; $('[data-act=toggle-pw]').textContent = 'Nascondi'; break; }
-      case 'toggle-pw': { const i = $('[data-k=admin_password]'); i.type = i.type === 'password' ? 'text' : 'password'; act.textContent = i.type === 'password' ? 'Mostra' : 'Nascondi'; break; }
+      case 'gen-pw': { S.f.admin_password = genPassword(); const i = $('[data-k=admin_password]'); i.value = S.f.admin_password; setPwVisible(i, true); break; }
+      case 'toggle-eye': setPwVisible(act.parentElement.querySelector('input'), act.parentElement.querySelector('input').type === 'password'); break;
       case 'start': startInstall(act); break;
       case 'cancel': if (confirm("Annullare l'installazione in corso?")) { act.disabled = true; await api('cancel', { job: S.job.id }); } break;
       case 'retry': S.job = null; S.step = 3; render(); break;

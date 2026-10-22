@@ -207,3 +207,9 @@ input.bad { border-color: var(--fail); }
   .main .card { padding: 20px; }
   .grid, .checks, .recap, .links-grid { grid-template-columns: 1fr; }
 }
+
+.pw-wrap { position: relative; display: block; }
+.input-row > .pw-wrap { flex: 1; }
+.pw-wrap > input { width: 100%; padding-right: 44px; }
+.pw-eye { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); display: flex; padding: 6px; border: 0; background: none; color: var(--muted); cursor: pointer; border-radius: 8px; }
+.pw-eye:hover { color: var(--text); }
