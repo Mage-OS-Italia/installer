@@ -16,6 +16,7 @@
     search: null,
     errors: [],
     job: null,
+    open: {},
   };
 
   // ------------------------------------------------------------------ utils
@@ -216,10 +217,10 @@
           <ul>${(x.highlights || []).map((h) => `<li>${esc(h)}</li>`).join('')}</ul>
         </label>`).join('')}</div>
 
-      ${(required.length || optional.length) ? `<h3>Moduli inclusi nella distro</h3><div class="pkg-list">
+      ${(required.length || optional.length) ? fold('distro', 'Moduli inclusi nella distro', distroCount(), `<div class="pkg-list">
         ${required.map((p) => `<label class="check" style="opacity:.75"><input type="checkbox" checked disabled><span><b>${esc(p.label)}</b> <span class="chip">sempre incluso</span><small>${esc(p.description || '')} · <code>${esc(p.name)}</code></small></span></label>`).join('')}
         ${optional.map((p) => `<label class="check"><input type="checkbox" data-pkg="${esc(p.name)}" ${S.f.packages.includes(p.name) ? 'checked' : ''}><span><b>${esc(p.label)}</b><small>${esc(p.description || '')} · <code>${esc(p.name)}</code></small></span></label>`).join('')}
-      </div>` : ''}
+      </div>`) : ''}
 
       ${mageosList()}
 
@@ -245,16 +246,33 @@
   function mageosList() {
     const own = distroPackageNames();
     const groups = [...new Set(S.boot.mageos.map((m) => m.group))];
-    return `<h3>Moduli Mage-OS</h3>
-      <div id="mageos-warn">${mageosWarning()}</div>
-      <p class="muted" style="margin:-6px 0 12px;font-size:13px">Moduli opzionali della community Mage-OS, installabili con qualsiasi distro (da Packagist, senza credenziali).</p>
+    return `<div id="mageos-warn" style="margin-top:28px">${mageosWarning()}</div>
+      ${fold('mageos', 'Moduli Mage-OS', mageosCount(), `<p class="muted" style="margin:0 0 12px;font-size:13px">Moduli opzionali della community Mage-OS, installabili con qualsiasi distro (da Packagist, senza credenziali).</p>
       ${groups.map((g) => `<div class="group"><h4 class="pkg-group">${esc(g)}</h4><div class="pkg-list">
         ${S.boot.mageos.filter((m) => m.group === g).map((m) => {
           const included = own.includes(m.name);
           const off = isIncompatible(m);
           return `<label class="check" ${off || included ? 'style="opacity:.6"' : ''}><input type="checkbox" data-mageos="${esc(m.name)}" ${included || S.f.mageos.includes(m.name) ? 'checked' : ''} ${off || included ? 'disabled' : ''}><span><b>${esc(m.label)}</b>${included ? ' <span class="chip">incluso nella distro</span>' : ''}${off ? ' <span class="chip">non disponibile con questa distro</span>' : ''}${tooOld(m) ? ` <span class="chip">richiede Magento ${esc(m.min_magento)}+</span>` : ''}<small>${esc(m.description)} · <code>${esc(m.name)}</code></small></span></label>`;
         }).join('')}
-      </div></div>`).join('')}`;
+      </div></div>`).join('')}`)}`;
+  }
+
+  /** Sezione richiudibile: parte chiusa, con il numero di voci attive nel titolo. */
+  const fold = (key, title, count, body) => `<details class="fold" data-fold="${key}" ${S.open[key] ? 'open' : ''}>
+    <summary><span class="fold-title">${esc(title)}</span><span class="fold-count" data-count="${key}">${esc(count)}</span></summary>
+    <div class="fold-body">${body}</div></details>`;
+  const distroCount = () => {
+    const ps = distro()?.packages || [];
+    const on = ps.filter((p) => p.required || S.f.packages.includes(p.name)).length;
+    return `${on} di ${ps.length} attivi`;
+  };
+  const mageosCount = () => {
+    const n = selectedMageos().length;
+    return n ? `${n} selezionat${n === 1 ? 'o' : 'i'}` : 'nessuno selezionato';
+  };
+  function updateCounts() {
+    $$('[data-count=distro]').forEach((e) => { e.textContent = distroCount(); });
+    $$('[data-count=mageos]').forEach((e) => { e.textContent = mageosCount(); });
   }
 
   // ------------------------------------------------------------ step 1
@@ -624,15 +642,18 @@
       };
       el.addEventListener(el.type === 'checkbox' || el.tagName === 'SELECT' ? 'change' : 'input', handler);
     });
+    $$('details[data-fold]', scope).forEach((d) => d.addEventListener('toggle', () => { S.open[d.dataset.fold] = d.open; }));
     $$('[data-mageos]', scope).forEach((el) => el.addEventListener('change', () => {
       const n = el.dataset.mageos;
       S.f.mageos = el.checked ? [...new Set([...S.f.mageos, n])] : S.f.mageos.filter((x) => x !== n);
       const w = $('#mageos-warn'); if (w) w.innerHTML = mageosWarning();
+      updateCounts();
     }));
     $$('[data-pkg]', scope).forEach((el) => el.addEventListener('change', () => {
       const n = el.dataset.pkg;
       S.f.packages = el.checked ? [...new Set([...S.f.packages, n])] : S.f.packages.filter((x) => x !== n);
       S.req = null;
+      updateCounts();
     }));
     $$('input[name=distro]', scope).forEach((el) => el.addEventListener('change', () => {
       S.f.distro = el.value;
