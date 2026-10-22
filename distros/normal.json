@@ -10,8 +10,8 @@
         "Nessuna credenziale richiesta"
     ],
     "defaults": {
-        "language": "en_US",
-        "currency": "USD",
+        "language": "it_IT",
+        "currency": "EUR",
         "timezone": "Europe/Rome"
     },
     "repositories": [],
