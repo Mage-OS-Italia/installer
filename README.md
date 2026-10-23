@@ -28,7 +28,7 @@ Metti la cartella in una directory servita dal web server (es. `installer-mage-o
 
 - Da localhost o rete privata l'accesso è libero; da rete pubblica serve il token scritto nel file indicato dalla pagina.
 - Job, log e credenziali stanno nella cartella temporanea di sistema, mai nella document root.
-- A installazione finita viene creato `.installed` e l'installer si blocca. **Rimuovilo dal server** quando non serve più.
+- A installazione finita con successo l'installer si cancella da solo (la pagina lo richiede appena mostra il riepilogo, quindi serve che il browser resti aperto fino ad allora). Se la cancellazione non riesce, o chiudi la pagina prima, resta il file `.installed` che lo blocca: **rimuovilo dal server** a mano.
 - La document root del sito installato deve puntare a `pub/`.
 
 ## Note

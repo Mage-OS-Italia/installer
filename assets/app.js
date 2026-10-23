@@ -577,13 +577,29 @@
           <div class="link-card" style="grid-column:1/-1"><small>Cartella</small><div class="v">${esc(r.target)}</div></div>
         </div>
         ${(r.warnings || []).map((w) => `<div class="notice">${esc(w)}</div>`).join('')}
-        <div class="notice">Per sicurezza l'installer è stato bloccato. Eliminalo dal server quando non ti serve più.</div>`;
-      act.innerHTML = `<button class="btn danger" data-act="remove">Rimuovi installer</button><div class="right"><a class="btn primary" href="${esc(r.storefront)}" target="_blank" rel="noopener" style="text-decoration:none">Apri il negozio →</a></div>`;
+        <div class="notice" id="self-remove">Installazione riuscita: elimino l'installer dal server…</div>`;
+      act.innerHTML = `<button class="btn danger" data-act="remove" hidden>Rimuovi installer</button><div class="right"><a class="btn primary" href="${esc(r.storefront)}" target="_blank" rel="noopener" style="text-decoration:none">Apri il negozio →</a></div>`;
       $('#job-log-wrap').open = false;
+      selfRemove();
     } else {
       $('#job-lead').textContent = j.state === 'cancelled' ? 'Installazione annullata' : 'Installazione non riuscita';
       out.innerHTML = `<div class="notice" style="border-color:rgba(248,113,113,.5);background:rgba(248,113,113,.08);color:#fecaca;margin-bottom:16px"><b>${esc(st.error || 'Errore sconosciuto')}</b><br>Controlla il log qui sotto per il dettaglio. La cartella <code>${esc(S.f.target)}</code> può contenere file parziali: svuotala prima di riprovare.</div>`;
       act.innerHTML = `<button class="btn" data-act="copy-log">Copia il log</button><div class="right"><button class="btn primary" data-act="retry">← Torna ai dati</button></div>`;
+    }
+  }
+
+  /** A installazione riuscita l'installer si cancella da solo; se non ci riesce, resta bloccato e il pulsante manuale. */
+  async function selfRemove() {
+    const note = $('#self-remove');
+    let ok = false;
+    try { ok = !!(await api('remove', {})).ok; } catch (e) { /* installer già sparito o rete caduta */ }
+    if (!note) return;
+    if (ok) {
+      note.textContent = "L'installer è stato eliminato dal server: puoi chiudere questa pagina.";
+    } else {
+      note.textContent = "Non sono riuscito a eliminare l'installer: è bloccato, rimuovilo a mano o con il pulsante.";
+      const b = $('[data-act=remove]');
+      if (b) b.hidden = false;
     }
   }
 
