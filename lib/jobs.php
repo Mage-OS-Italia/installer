@@ -29,6 +29,15 @@ function validate_install(array $in): array
     if (!$version) {
         $err[] = 'Versione non valida.';
     }
+    if ($version && ($version['php'] ?? '') !== '') {
+        $cli = php_cli_info();
+        if (!$cli) {
+            $err[] = 'PHP da riga di comando non trovato: servono composer e bin/magento.';
+        } elseif (!php_satisfies($cli['version'], $version['php'])) {
+            $err[] = 'Il PHP da riga di comando (' . $cli['version'] . ') non è supportato da ' . $platform['name'] . ' ' . $version['version']
+                . ' (richiede ' . preg_replace('/~?(\d+\.\d+)\.0/', '$1.x', str_replace('||', ' · ', $version['php'])) . '). Scegli una versione più recente o un altro PHP.';
+        }
+    }
     $distros = distros();
     $distro = $distros[$s('distro')] ?? null;
     if (!$distro) {
