@@ -68,6 +68,9 @@
     const k = text.match(new RegExp(host + '[\'"]?\\s+token\\s+[\'"]?([A-Za-z0-9_-]{8,})')) || text.match(/"password"\s*:\s*"([A-Za-z0-9_-]{8,})"/);
     return p && k ? { project: p[1], key: k[1] } : null;
   }
+  /** Catalogo piccolo: ricerca MySQL senza OpenSearch, come su threecommerce. */
+  const mysqlEligible = () => S.f.products >= 1 && S.f.products <= S.boot.mysql_search.max_products;
+  const useMysql = () => mysqlEligible() && !S.f.use_opensearch;
   const hyvaOk = () => S.f.frontend !== 'hyva' || !!parseHyva(S.f.hyva_keys);
 
   /** Pacchetti scelti (richiesti + opzionali) e se servono credenziali. */
@@ -127,7 +130,7 @@
     const latest = b.platforms.magento.versions[0];
     const parent = (b.server.parent_dir || '').replace(/\/+$/, '');
     S.f = {
-      platform: 'magento', version: latest.version, distro: (b.distros.find((d) => d.default) || b.distros[0])?.id || 'normal', frontend: 'luma', checkout: 'loki', hyva_keys: '', packages: [], mageos: [], sample_data: false, italian_tax: false,
+      platform: 'magento', version: latest.version, distro: (b.distros.find((d) => d.default) || b.distros[0])?.id || 'normal', frontend: 'luma', checkout: 'loki', hyva_keys: '', products: 1000, use_opensearch: false, packages: [], mageos: [], sample_data: false, italian_tax: false,
       target: parent + '/magento-store', base_url: '', store_name: 'Magento Store', backend_frontname: 'admin',
       language: 'it_IT', currency: 'EUR', timezone: 'Europe/Rome',
       db_host: 'localhost', db_name: '', db_user: 'root', db_password: '', db_prefix: '', create_db: true, cleanup_db: false,
@@ -177,7 +180,7 @@
     panel.innerHTML = fn();
     bind(panel);
     if (S.step === 1 && !S.req && !S.reqLoading) runRequirements();
-    if (S.step === 2 && !S.search) testSearch(true);
+    if (S.step === 2 && !S.search && !useMysql()) testSearch(true);
     if (S.step === 4 && S.job) resumeJobView();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -229,6 +232,10 @@
 
       ${frontendSection()}
 
+      <h3>Catalogo</h3>
+      ${field('Quanti prodotti prevedi di avere?', 'products', { type: 'number', attrs: 'min="1" step="1"', hint: 'Decide il motore di ricerca.' })}
+      <div id="search-mode" style="margin-top:10px">${searchModeBox()}</div>
+
       ${(required.length || optional.length) ? fold('distro', 'Moduli inclusi nella distro', distroCount(), `<div class="pkg-list">
         ${required.map((p) => `<label class="check" style="opacity:.75"><input type="checkbox" checked disabled><span><b>${esc(p.label)}</b> <span class="chip">sempre incluso</span><small>${esc(p.description || '')} · <code>${esc(p.name)}</code></small></span></label>`).join('')}
         ${optional.map((p) => `<label class="check"><input type="checkbox" data-pkg="${esc(p.name)}" ${S.f.packages.includes(p.name) ? 'checked' : ''}><span><b>${esc(p.label)}</b><small>${esc(p.description || '')} · <code>${esc(p.name)}</code></small></span></label>`).join('')}
@@ -245,6 +252,15 @@
       <h3>Dove installare</h3>
       ${field('Cartella di destinazione', 'target', { full: true, ph: '/var/www/mio-negozio', hint: 'Percorso assoluto sul server. Deve essere vuota o non esistere: verrà creata. La document root del sito dovrà puntare a <code>pub/</code>.' })}
       ${actions(false, true)}`;
+  }
+
+  function searchModeBox() {
+    const max = S.boot.mysql_search.max_products.toLocaleString('it-IT');
+    if (!mysqlEligible()) {
+      return `<div class="notice" style="margin:0">${S.f.products >= 1 ? `Sopra i ${max} prodotti serve OpenSearch o Elasticsearch: li configuri al passo «Database e ricerca».` : 'Indica un numero di prodotti valido.'}</div>`;
+    }
+    return `<div class="notice" style="margin:0">Fino a ${max} prodotti basta la <b>ricerca MySQL</b> (modulo Swissup, come su threecommerce): OpenSearch non viene installato né richiesto e il server resta più leggero.</div>
+      <div style="margin-top:10px">${checkbox('use_opensearch', 'Usa comunque OpenSearch / Elasticsearch', 'Scegli questa opzione se prevedi di crescere o se hai bisogno delle funzioni del motore dedicato.')}</div>`;
   }
 
   /** Tema del negozio (Luma o Hyvä) e checkout. */
@@ -293,7 +309,7 @@
 
   /** Sezione richiudibile: parte chiusa, con il numero di voci attive nel titolo. */
   const fold = (key, title, count, body) => `<details class="fold" data-fold="${key}" ${S.open[key] ? 'open' : ''}>
-    <summary><span class="fold-title">${esc(title)}</span><span class="fold-count" data-count="${key}">${esc(count)}</span></summary>
+    <summary><span class="fold-title">${esc(title)}</span><span class="fold-count" data-count="${key}">${esc(count)}</span><span class="fold-cta"></span></summary>
     <div class="fold-body">${body}</div></details>`;
   const distroCount = () => {
     const ps = distro()?.packages || [];
@@ -370,7 +386,7 @@
   function step2() {
     return `
       <h2>Database e ricerca</h2>
-      <p class="lead">${esc(pname())} usa MySQL o MariaDB per i dati e OpenSearch o Elasticsearch per catalogo e ricerca.</p>
+      <p class="lead">${esc(pname())} usa MySQL o MariaDB per i dati${useMysql() ? ' e per la ricerca.' : ' e OpenSearch o Elasticsearch per catalogo e ricerca.'}</p>
       <h3 style="margin-top:0">Database</h3>
       <div class="grid">
         ${field('Host', 'db_host', { ph: 'localhost', hint: 'Anche host:porta o percorso del socket.' })}
@@ -387,7 +403,7 @@
       ${testBoxHtml(S.db, 'db-test')}
       <div id="unsupported-box">${unsupportedBox()}</div>
 
-      <h3>Motore di ricerca</h3>
+      ${useMysql() ? `<h3>Motore di ricerca</h3><div class="notice" style="margin:0">Ricerca MySQL (catalogo fino a ${S.f.products.toLocaleString('it-IT')} prodotti): nessun motore da configurare. Per usare OpenSearch torna al primo passo.</div>` : `<h3>Motore di ricerca</h3>
       <div class="grid">
         ${select('Motore', 'search_engine', [['opensearch', 'OpenSearch'], ['elasticsearch8', 'Elasticsearch 8'], ['elasticsearch7', 'Elasticsearch 7']])}
         ${field('Prefisso indice', 'search_prefix')}
@@ -397,7 +413,7 @@
         ${field('Password', 'search_password', { type: 'password' })}
       </div>
       <div style="margin-top:14px"><button class="btn small" data-act="test-search">Testa connessione alla ricerca</button></div>
-      ${testBoxHtml(S.search, 'search-test')}
+      ${testBoxHtml(S.search, 'search-test')}`}
       ${actions(true, true, 'Avanti →', !step2Ok())}`;
   }
   function unsupportedBox() {
@@ -406,7 +422,7 @@
   }
   function step2Ok() {
     const dbOk = S.db && (S.db.status === 'ok' || (S.db.status === 'warn' && S.f.cleanup_db) || (S.db.unsupported && S.f.allow_unsupported_db));
-    return !!(dbOk && S.search && S.search.status === 'ok');
+    return !!(dbOk && (useMysql() || (S.search && S.search.status === 'ok')));
   }
 
   // ------------------------------------------------------------ step 3
@@ -482,7 +498,7 @@
         <section><h4>${esc(pname())}</h4><dl>${row('Versione', esc(v.version))}${row('Distro', esc(d.name))}${row('Tema', esc(frontend().name))}${row('Checkout', esc(frontend().checkouts.find((c) => c.id === f.checkout)?.label || ''))}${row('Moduli extra', pk.length)}${row('Dati di esempio', f.sample_data ? 'sì' : 'no')}${row('IVA italiana', f.italian_tax ? 'sì' : 'no')}${row('Modalità', esc(f.deploy_mode))}</dl></section>
         <section><h4>Destinazione</h4><dl>${row('Cartella', esc(f.target))}${row('Base URL', esc(f.base_url))}${row('Admin', esc('/' + f.backend_frontname))}</dl></section>
         <section><h4>Database</h4><dl>${row('Server', esc((S.db?.server || '') + ' ' + (S.db?.version || '')))}${row('Host', esc(f.db_host))}${row('Database', esc(f.db_name))}${row('Utente', esc(f.db_user))}${row('Svuota', f.cleanup_db ? 'sì' : 'no')}</dl></section>
-        <section><h4>Ricerca</h4><dl>${row('Motore', esc(f.search_engine))}${row('Host', esc(f.search_host + ':' + f.search_port))}${row('Prefisso', esc(f.search_prefix))}</dl></section>
+        <section><h4>Ricerca</h4><dl>${useMysql() ? row('Motore', 'MySQL (Swissup)') + row('Prodotti previsti', esc(f.products)) : row('Motore', esc(f.search_engine)) + row('Host', esc(f.search_host + ':' + f.search_port)) + row('Prefisso', esc(f.search_prefix))}</dl></section>
         <section><h4>Negozio</h4><dl>${row('Nome', esc(f.store_name))}${row('Lingua', esc(f.language))}${row('Valuta', esc(f.currency))}${row('Fuso orario', esc(f.timezone))}</dl></section>
         <section><h4>Amministratore</h4><dl>${row('Nome', esc(f.admin_firstname + ' ' + f.admin_lastname))}${row('Email', esc(f.admin_email))}${row('Username', esc(f.admin_user))}${row('Password', '••••••••')}</dl></section>
       </div>
@@ -689,6 +705,10 @@
         if (k === 'cleanup_db' || k === 'allow_unsupported_db') updateNext();
         if (['db_host', 'db_name', 'db_user', 'db_password'].includes(k) || k.startsWith('search_')) updateNext();
         if (k === 'sample_data') S.req = null;
+        if (k === 'products' || k === 'use_opensearch') {
+          const m = $('#search-mode');
+          if (m) { m.innerHTML = searchModeBox(); bind(m); }
+        }
       };
       el.addEventListener(el.type === 'checkbox' || el.tagName === 'SELECT' ? 'change' : 'input', handler);
     });
@@ -733,6 +753,7 @@
       if (nav.dataset.nav === 'back') { S.step = Math.max(0, S.step - 1); render(); return; }
       if (S.step === 0) {
         if (!S.f.target.startsWith('/')) { alert('Inserisci un percorso assoluto per la cartella di destinazione.'); return; }
+        if (!(S.f.products >= 1)) { alert('Indica quanti prodotti prevedi di avere a catalogo.'); return; }
         if (!hyvaOk()) { alert("Incolla le chiavi Hyvä copiate dall'area licenze di hyva.io."); return; }
         S.req = null;
       }

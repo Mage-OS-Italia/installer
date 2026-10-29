@@ -307,7 +307,6 @@ final class Worker
             '--currency=' . $c['currency'],
             '--timezone=' . $c['timezone'],
             '--use-rewrites=1',
-            '--search-engine=' . $c['search']['engine'],
         ];
         if ($c['db']['prefix'] !== '') {
             $a[] = '--db-prefix=' . $c['db']['prefix'];
@@ -315,14 +314,18 @@ final class Worker
         if ($c['cleanup_db']) {
             $a[] = '--cleanup-database';
         }
-        $se = $c['search']['engine'] === 'opensearch' ? 'opensearch' : 'elasticsearch';
-        $a[] = "--$se-host=" . $c['search']['host'];
-        $a[] = "--$se-port=" . $c['search']['port'];
-        $a[] = "--$se-index-prefix=" . $c['search']['prefix'];
-        if ($c['search']['user'] !== '') {
-            $a[] = "--$se-enable-auth=1";
-            $a[] = "--$se-username=" . $c['search']['user'];
-            $a[] = "--$se-password=" . $c['search']['password'];
+        // Con la ricerca MySQL il motore non si passa: setup:install non conosce ancora 'lmysql' e lo imposta configure().
+        if ($c['search']['host'] !== '') {
+            $a[] = '--search-engine=' . $c['search']['engine'];
+            $se = $c['search']['engine'] === 'opensearch' ? 'opensearch' : 'elasticsearch';
+            $a[] = "--$se-host=" . $c['search']['host'];
+            $a[] = "--$se-port=" . $c['search']['port'];
+            $a[] = "--$se-index-prefix=" . $c['search']['prefix'];
+            if ($c['search']['user'] !== '') {
+                $a[] = "--$se-enable-auth=1";
+                $a[] = "--$se-username=" . $c['search']['user'];
+                $a[] = "--$se-password=" . $c['search']['password'];
+            }
         }
         if (str_starts_with($c['base_url'], 'https://')) {
             $a[] = '--use-secure=1';
@@ -344,6 +347,9 @@ final class Worker
     {
         $c = $this->cfg;
         $conf = ['general/store_information/name' => $c['store_name']] + $c['distro_config'];
+        if ($c['search']['host'] === '') {
+            $conf['catalog/search/engine'] = $c['search']['engine'];
+        }
         foreach ($conf as $path => $value) {
             $this->mage('config:set ' . escapeshellarg((string)$path) . ' ' . escapeshellarg((string)$value), false);
         }

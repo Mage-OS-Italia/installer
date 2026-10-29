@@ -1,0 +1,16 @@
+{
+    "max_products": 10000,
+    "engine": "lmysql",
+    "packages": {
+        "swissup/module-search-mysql-legacy": "^1.1"
+    },
+    "replace": [
+        "{vendor}/module-elasticsearch",
+        "{vendor}/module-elasticsearch-7",
+        "{vendor}/module-elasticsearch-8",
+        "{vendor}/module-open-search",
+        "{vendor}/module-inventory-elasticsearch",
+        "elasticsearch/elasticsearch",
+        "opensearch-project/opensearch-php"
+    ]
+}

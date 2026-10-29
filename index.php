@@ -83,6 +83,7 @@ if ($action !== '') {
                 'distros' => array_values(distros()),
                 'mageos' => mageos_modules(),
                 'frontends' => array_values(frontends()),
+                'mysql_search' => mysql_search(),
                 'locale' => locale_options(),
                 'server' => server_info(),
                 'app' => ['name' => APP_NAME, 'version' => APP_VERSION],

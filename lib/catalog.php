@@ -182,6 +182,16 @@ function parse_hyva_keys(string $text): ?array
     return ['project' => $p[1], 'key' => $k[1]];
 }
 
+/**
+ * Ricerca con MySQL (modulo Swissup "legacy") al posto di OpenSearch, per i cataloghi piccoli:
+ * è la scelta fatta su threecommerce. Sopra `max_products` serve OpenSearch/Elasticsearch.
+ */
+function mysql_search(): array
+{
+    $c = json_decode((string)@file_get_contents(APP_ROOT . '/catalog/search.json'), true);
+    return is_array($c) ? $c : ['max_products' => 0, 'engine' => '', 'packages' => [], 'replace' => []];
+}
+
 /** Lingue, valute e fusi orari proposti dal form. */
 function locale_options(): array
 {

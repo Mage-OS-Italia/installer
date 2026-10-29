@@ -83,17 +83,28 @@ function validate_install(array $in): array
         $err[] = 'Prefisso tabelle non valido.';
     }
 
-    $engine = $s('search_engine');
-    if (!in_array($engine, ['opensearch', 'elasticsearch8', 'elasticsearch7'], true)) {
-        $err[] = 'Motore di ricerca non valido.';
+    // Catalogo piccolo: ricerca MySQL, senza OpenSearch (salvo richiesta esplicita di usarlo).
+    $ms = mysql_search();
+    $products = (int)($in['products'] ?? 0);
+    if ($products < 1) {
+        $err[] = 'Indica quanti prodotti prevedi di avere a catalogo.';
     }
-    $search = ['engine' => $engine, 'host' => $s('search_host'), 'port' => (int)($in['search_port'] ?? 9200),
-        'prefix' => $s('search_prefix') ?: 'magento2', 'user' => $s('search_user'), 'password' => (string)($in['search_password'] ?? '')];
-    if (!preg_match('/^[\w.\-]+$/', $search['host']) || $search['port'] < 1 || $search['port'] > 65535) {
-        $err[] = 'Host o porta del motore di ricerca non validi.';
-    }
-    if (!preg_match('/^[A-Za-z0-9_-]{1,32}$/', $search['prefix'])) {
-        $err[] = 'Prefisso indice di ricerca non valido.';
+    $useMysql = $products >= 1 && $products <= (int)$ms['max_products'] && empty($in['use_opensearch']);
+    if ($useMysql) {
+        $search = ['engine' => $ms['engine'], 'host' => '', 'port' => 0, 'prefix' => '', 'user' => '', 'password' => ''];
+    } else {
+        $engine = $s('search_engine');
+        if (!in_array($engine, ['opensearch', 'elasticsearch8', 'elasticsearch7'], true)) {
+            $err[] = 'Motore di ricerca non valido.';
+        }
+        $search = ['engine' => $engine, 'host' => $s('search_host'), 'port' => (int)($in['search_port'] ?? 9200),
+            'prefix' => $s('search_prefix') ?: 'magento2', 'user' => $s('search_user'), 'password' => (string)($in['search_password'] ?? '')];
+        if (!preg_match('/^[\w.\-]+$/', $search['host']) || $search['port'] < 1 || $search['port'] > 65535) {
+            $err[] = 'Host o porta del motore di ricerca non validi.';
+        }
+        if (!preg_match('/^[A-Za-z0-9_-]{1,32}$/', $search['prefix'])) {
+            $err[] = 'Prefisso indice di ricerca non valido.';
+        }
     }
 
     $admin = ['firstname' => $s('admin_firstname'), 'lastname' => $s('admin_lastname'), 'email' => $s('admin_email'),
@@ -185,6 +196,15 @@ function validate_install(array $in): array
         }
     }
 
+    if ($useMysql && $platform) {
+        foreach ($ms['packages'] as $n => $v) {
+            $packages[] = $n . ':' . $v;
+        }
+        foreach ($ms['replace'] as $n) {
+            $replace[] = str_replace('{vendor}', $platform['vendor'], $n);
+        }
+    }
+
     $credentials = $feCreds;
     foreach ($repos as $r) {
         if (isset($feCreds[$r['host']])) {
@@ -213,6 +233,7 @@ function validate_install(array $in): array
         'cleanup_db' => !empty($in['cleanup_db']),
         'allow_unsupported_db' => !empty($in['allow_unsupported_db']),
         'search' => $search,
+        'products' => $products,
         'admin' => $admin,
         'deploy_mode' => $mode,
         'sample_data' => !empty($in['sample_data']),
