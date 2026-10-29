@@ -153,6 +153,10 @@ function validate_install(array $in): array
                 $err[] = $m['label'] . ' non è compatibile con la distro ' . $distro['name'] . '.';
                 continue;
             }
+            if ($useMysql && !empty($m['needs_opensearch'])) {
+                $err[] = $m['label'] . ' richiede OpenSearch: con la ricerca MySQL non è installabile.';
+                continue;
+            }
             // Già incluso dalla distro (es. RMA in quella italiana): non lo duplichiamo.
             if (!preg_grep('#^' . preg_quote($m['name'], '#') . ':#', $packages)) {
                 $packages[] = $m['name'] . ':' . $m['constraint'];

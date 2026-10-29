@@ -94,7 +94,7 @@
     return 0;
   };
   const tooOld = (m) => S.f.platform === 'magento' && !!m.min_magento && vcmp(S.f.version, m.min_magento) < 0;
-  const isIncompatible = (m) => (m.incompatible_with || []).includes(S.f.distro);
+  const isIncompatible = (m) => (m.incompatible_with || []).includes(S.f.distro) || (!!m.needs_opensearch && useMysql());
   const selectedMageos = () => S.boot.mageos.filter((m) => S.f.mageos.includes(m.name) && !isIncompatible(m) && !distroPackageNames().includes(m.name));
 
   function applyDistroDefaults() {
@@ -307,7 +307,7 @@
         ${S.boot.mageos.filter((m) => m.group === g).map((m) => {
           const included = own.includes(m.name);
           const off = isIncompatible(m);
-          return `<label class="check" ${off || included ? 'style="opacity:.6"' : ''}><input type="checkbox" data-mageos="${esc(m.name)}" ${included || S.f.mageos.includes(m.name) ? 'checked' : ''} ${off || included ? 'disabled' : ''}><span><b>${esc(m.label)}</b>${included ? ' <span class="chip">incluso nella distro</span>' : ''}${off ? ' <span class="chip">non disponibile con questa distro</span>' : ''}${tooOld(m) ? ` <span class="chip">richiede Magento ${esc(m.min_magento)}+</span>` : ''}<small>${esc(m.description)} · <code>${esc(m.name)}</code></small></span></label>`;
+          return `<label class="check" ${off || included ? 'style="opacity:.6"' : ''}><input type="checkbox" data-mageos="${esc(m.name)}" ${included || S.f.mageos.includes(m.name) ? 'checked' : ''} ${off || included ? 'disabled' : ''}><span><b>${esc(m.label)}</b>${included ? ' <span class="chip">incluso nella distro</span>' : ''}${off ? ` <span class="chip">${m.needs_opensearch && useMysql() ? 'richiede OpenSearch' : 'non disponibile con questa distro'}</span>` : ''}${tooOld(m) ? ` <span class="chip">richiede Magento ${esc(m.min_magento)}+</span>` : ''}<small>${esc(m.description)} · <code>${esc(m.name)}</code></small></span></label>`;
         }).join('')}
       </div></div>`).join('')}`)}`;
   }
