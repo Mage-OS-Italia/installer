@@ -148,8 +148,48 @@ function validate_install(array $in): array
             }
         }
     }
-    $credentials = [];
+
+    // Tema e checkout: pacchetti, repository e replace vengono sempre dal catalogo.
+    $frontendId = $s('frontend') ?: 'luma';
+    $fe = frontends()[$frontendId] ?? null;
+    $replace = [];
+    $feCreds = [];
+    $checkoutId = '';
+    if (!$fe) {
+        $err[] = 'Tema non valido.';
+    } else {
+        $co = null;
+        foreach ($fe['checkouts'] as $c) {
+            if ($c['id'] === $s('checkout')) {
+                $co = $c;
+            }
+        }
+        if (!$co) {
+            $err[] = 'Checkout non valido per il tema scelto.';
+        } else {
+            $checkoutId = $co['id'];
+            foreach (($fe['packages'] ?? []) + $co['packages'] as $n => $v) {
+                $packages[] = $n . ':' . $v;
+            }
+        }
+        $replace = $fe['replace'] ?? [];
+        if (!empty($fe['repository'])) {
+            $keys = parse_hyva_keys((string)($in['hyva_keys'] ?? ''));
+            if (!$keys) {
+                $err[] = 'Chiavi Hyvä non riconosciute: incolla il blocco copiato dall\'area licenze di Hyvä.';
+            } else {
+                $r = $fe['repository'];
+                $repos[$r['id']] = ['id' => $r['id'], 'name' => 'Hyvä', 'url' => str_replace('{project}', $keys['project'], $r['url']), 'host' => $r['host']];
+                $feCreds[$r['host']] = ['username' => 'token', 'password' => $keys['key']];
+            }
+        }
+    }
+
+    $credentials = $feCreds;
     foreach ($repos as $r) {
+        if (isset($feCreds[$r['host']])) {
+            continue;
+        }
         $c = $in['credentials'][$r['host']] ?? [];
         $u = trim((string)($c['user'] ?? ''));
         $pw = (string)($c['password'] ?? '');
@@ -183,8 +223,9 @@ function validate_install(array $in): array
         'packages' => $packages,
         'repositories' => array_values($repos),
         'credentials' => $credentials,
+        'frontend' => ['id' => $frontendId, 'checkout' => $checkoutId, 'theme_path' => $fe['theme_path'] ?? ''],
         'distro_config' => (array)($distro['config'] ?? []),
-        'replace' => array_values(array_filter((array)($distro[$s('platform') === 'mageos' ? 'replace_mageos' : 'replace'] ?? []), fn($n) => is_string($n) && preg_match('#^[a-z0-9_.-]+/[a-z0-9_.-]+$#', $n))),
+        'replace' => array_values(array_filter(array_merge($replace, (array)($distro[$s('platform') === 'mageos' ? 'replace_mageos' : 'replace'] ?? [])), fn($n) => is_string($n) && preg_match('#^[a-z0-9_.-]+/[a-z0-9_.-]+$#', $n))),
     ];
     return [$config, $err];
 }

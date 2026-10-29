@@ -1,0 +1,73 @@
+{
+    "luma": {
+        "id": "luma",
+        "name": "Luma",
+        "tagline": "Il tema di serie di Magento",
+        "description": "Il tema che Magento e Mage-OS installano di base. Nessuna chiave richiesta.",
+        "highlights": [
+            "Nessuna licenza o chiave",
+            "Checkout Loki al posto di quello di serie (open source)"
+        ],
+        "theme_path": "Magento/luma",
+        "checkouts": [
+            {
+                "id": "loki",
+                "label": "Loki Checkout",
+                "description": "Checkout open source che sostituisce quello di Luma. Dopo l'installazione va compilato il CSS Tailwind del modulo Luma.",
+                "packages": {
+                    "loki-checkout/magento2-core": "^2.0",
+                    "loki-checkout/magento2-luma": "^1.0",
+                    "loki-checkout/magento2-core-cli": "^1.0"
+                }
+            },
+            {
+                "id": "default",
+                "label": "Checkout di serie",
+                "description": "Il checkout Luma di Magento, senza modifiche.",
+                "packages": {}
+            }
+        ]
+    },
+    "hyva": {
+        "id": "hyva",
+        "name": "Hyvä",
+        "tagline": "Tema veloce basato su Alpine.js e Tailwind CSS",
+        "description": "Tema commerciale: servono la licenza e le chiavi Hyvä. Luma e Blank vengono esclusi dall'installazione per alleggerire la piattaforma.",
+        "highlights": [
+            "Richiede una licenza Hyvä",
+            "Luma e Blank non vengono installati"
+        ],
+        "theme_path": "Hyva/default",
+        "repository": {
+            "id": "hyva",
+            "url": "https://hyva-themes.repo.packagist.com/{project}/",
+            "host": "hyva-themes.repo.packagist.com"
+        },
+        "packages": {
+            "hyva-themes/magento2-default-theme": "*"
+        },
+        "replace": [
+            "magento/theme-frontend-luma",
+            "magento/theme-frontend-blank"
+        ],
+        "checkouts": [
+            {
+                "id": "loki",
+                "label": "Loki Checkout",
+                "description": "Checkout open source, nessuna licenza aggiuntiva. Dopo l'installazione va ricompilato il CSS Tailwind del tema.",
+                "packages": {
+                    "loki-checkout/magento2-core": "^2.0",
+                    "loki-checkout/magento2-hyva": "^1.0"
+                }
+            },
+            {
+                "id": "hyva",
+                "label": "Hyvä Checkout",
+                "description": "Checkout ufficiale Hyvä. Usa le stesse chiavi del tema, ma serve la licenza Hyvä Checkout (o Hyvä Commerce).",
+                "packages": {
+                    "hyva-themes/magento2-hyva-checkout": "*"
+                }
+            }
+        ]
+    }
+}

@@ -82,6 +82,8 @@ input[type=text], input[type=password], input[type=email], input[type=number], s
   width: 100%; padding: 11px 13px; border-radius: 11px; border: 1px solid var(--line);
   background: rgba(8, 9, 30, .55); color: var(--text); font: inherit; outline: none; transition: border-color .15s, box-shadow .15s;
 }
+textarea { width: 100%; padding: 11px 13px; border-radius: 11px; border: 1px solid var(--line); background: rgba(8, 9, 30, .55); color: var(--text); font: 13px/1.5 ui-monospace, Menlo, monospace; outline: none; resize: vertical; }
+textarea:focus { border-color: var(--orange-2); box-shadow: 0 0 0 3px rgba(255, 106, 26, .22); }
 select option { background: #14163d; }
 input:focus, select:focus { border-color: var(--orange-2); box-shadow: 0 0 0 3px rgba(255, 106, 26, .22); }
 input.bad { border-color: var(--fail); }

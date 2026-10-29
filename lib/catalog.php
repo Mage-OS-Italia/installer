@@ -158,6 +158,30 @@ function mageos_modules(): array
     return $out;
 }
 
+/** Temi del negozio e relativi checkout (catalog/frontend.json). */
+function frontends(): array
+{
+    $list = json_decode((string)@file_get_contents(APP_ROOT . '/catalog/frontend.json'), true);
+    return is_array($list) ? $list : [];
+}
+
+/**
+ * Ricava progetto e chiave dal blocco incollato dall'area licenze di Hyvä: i comandi `composer config`,
+ * l'URL del repository o un auth.json. Il resto del testo viene scartato.
+ */
+function parse_hyva_keys(string $text): ?array
+{
+    $host = 'hyva-themes\.repo\.packagist\.com';
+    if (!preg_match('#' . $host . '/([A-Za-z0-9][A-Za-z0-9_.-]*)#', $text, $p)) {
+        return null;
+    }
+    if (!preg_match('#' . $host . '[\'"]?\s+token\s+[\'"]?([A-Za-z0-9_-]{8,})#', $text, $k)
+        && !preg_match('#"password"\s*:\s*"([A-Za-z0-9_-]{8,})"#', $text, $k)) {
+        return null;
+    }
+    return ['project' => $p[1], 'key' => $k[1]];
+}
+
 /** Lingue, valute e fusi orari proposti dal form. */
 function locale_options(): array
 {

@@ -31,6 +31,7 @@ final class Worker
     private int $lastProgressLogged = -1;
     private string $dbVersion = '';
     private bool $dbIsMaria = false;
+    private array $warnings = [];
 
     private const STEPS = [
         'preflight' => 'Verifica ambiente e database',
@@ -348,6 +349,8 @@ final class Worker
         }
         $this->detail('configure', 'Configurazione salvata');
 
+        $this->frontend();
+
         if ($c['italian_tax']) {
             $this->detail('configure', 'IVA italiana…');
             $this->italianTax();
@@ -372,6 +375,45 @@ final class Worker
 
         $this->detail('configure', 'Modalità ' . $c['deploy_mode'] . '…');
         $this->mage($c['deploy_mode'] === 'production' ? 'deploy:mode:set production' : 'deploy:mode:set developer --skip-compilation');
+    }
+
+    /**
+     * Tema e checkout. Con Hyvä, Luma non c'è più e Magento non sa quale tema usare: lo attiviamo noi.
+     * Il CSS Tailwind di Loki (e di Hyvä Checkout) non lo compiliamo: serve Node e il tema del progetto.
+     */
+    private function frontend(): void
+    {
+        $fe = $this->cfg['frontend'] ?? ['id' => 'luma', 'checkout' => '', 'theme_path' => ''];
+        if ($fe['id'] === 'hyva') {
+            $this->detail('configure', 'Tema Hyvä…');
+            $c = $this->cfg;
+            $pdo = db_connect($c['db']['host'], $c['db']['user'], $c['db']['password'], $c['db']['name']);
+            $st = $pdo->prepare('SELECT theme_id FROM `' . str_replace('`', '', $c['db']['prefix'] . 'theme') . '` WHERE theme_path = ? AND area = ? LIMIT 1');
+            $st->execute([$fe['theme_path'], 'frontend']);
+            $id = $st->fetchColumn();
+            if ($id === false) {
+                throw new StepFailure('Tema ' . $fe['theme_path'] . ' non registrato: verifica che il pacchetto Hyvä sia stato installato.');
+            }
+            $this->mage('config:set design/theme/theme_id ' . (int)$id);
+            $this->log('Tema attivo: ' . $fe['theme_path'] . '. Luma e Blank non sono installati.');
+        }
+        if ($fe['checkout'] === 'loki') {
+            if ($fe['id'] === 'hyva') {
+                $this->mage('hyva:config:generate', false);
+            }
+            $this->warn('Loki Checkout: compila il CSS Tailwind ' . ($fe['id'] === 'hyva' ? 'del tema Hyvä' : 'del modulo Luma') . ' (documentazione su loki-checkout.com), altrimenti il checkout non è stilizzato.');
+        } elseif ($fe['checkout'] === 'hyva') {
+            $this->mage('config:set dev/template/minify_html 0', false);
+            $this->log('Minificazione HTML disattivata, come richiede Hyvä Checkout.');
+            $this->warn('Hyvä Checkout: ricompila il CSS Tailwind del tema e attiva il checkout in Stores > Configuration > Hyvä Themes > Checkout.');
+        }
+    }
+
+    /** Avvisi mostrati nel riepilogo finale. */
+    private function warn(string $text): void
+    {
+        $this->warnings[] = $text;
+        $this->log('⚠ ' . $text);
     }
 
     /**
@@ -454,7 +496,7 @@ final class Worker
         $this->mage('cache:flush');
 
         $dur = (int)round(microtime(true) - $this->t0);
-        $warnings = [];
+        $warnings = $this->warnings;
         if (!is_file($c['target'] . '/pub/index.php')) {
             $warnings[] = 'pub/index.php non trovato: verifica la struttura del progetto.';
         }

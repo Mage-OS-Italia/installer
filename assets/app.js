@@ -60,6 +60,16 @@
   const distro = () => S.boot.distros.find((d) => d.id === S.f.distro);
   const phpHuman = (c) => (c || 'n/d').replace(/\|\|/g, ' · ').replace(/~?(\d+\.\d+)\.0/g, '$1.x');
 
+  const frontend = () => S.boot.frontends.find((x) => x.id === S.f.frontend);
+  /** Stessa lettura del server (parse_hyva_keys): serve solo a dare un riscontro subito. */
+  function parseHyva(text) {
+    const host = 'hyva-themes\\.repo\\.packagist\\.com';
+    const p = text.match(new RegExp(host + '/([A-Za-z0-9][A-Za-z0-9_.-]*)'));
+    const k = text.match(new RegExp(host + '[\'"]?\\s+token\\s+[\'"]?([A-Za-z0-9_-]{8,})')) || text.match(/"password"\s*:\s*"([A-Za-z0-9_-]{8,})"/);
+    return p && k ? { project: p[1], key: k[1] } : null;
+  }
+  const hyvaOk = () => S.f.frontend !== 'hyva' || !!parseHyva(S.f.hyva_keys);
+
   /** Pacchetti scelti (richiesti + opzionali) e se servono credenziali. */
   function selectedPackages() {
     const d = distro();
@@ -117,7 +127,7 @@
     const latest = b.platforms.magento.versions[0];
     const parent = (b.server.parent_dir || '').replace(/\/+$/, '');
     S.f = {
-      platform: 'magento', version: latest.version, distro: (b.distros.find((d) => d.default) || b.distros[0])?.id || 'normal', packages: [], mageos: [], sample_data: false, italian_tax: false,
+      platform: 'magento', version: latest.version, distro: (b.distros.find((d) => d.default) || b.distros[0])?.id || 'normal', frontend: 'luma', checkout: 'loki', hyva_keys: '', packages: [], mageos: [], sample_data: false, italian_tax: false,
       target: parent + '/magento-store', base_url: '', store_name: 'Magento Store', backend_frontname: 'admin',
       language: 'it_IT', currency: 'EUR', timezone: 'Europe/Rome',
       db_host: 'localhost', db_name: '', db_user: 'root', db_password: '', db_prefix: '', create_db: true, cleanup_db: false,
@@ -217,6 +227,8 @@
           <ul>${(x.highlights || []).map((h) => `<li>${esc(h)}</li>`).join('')}</ul>
         </label>`).join('')}</div>
 
+      ${frontendSection()}
+
       ${(required.length || optional.length) ? fold('distro', 'Moduli inclusi nella distro', distroCount(), `<div class="pkg-list">
         ${required.map((p) => `<label class="check" style="opacity:.75"><input type="checkbox" checked disabled><span><b>${esc(p.label)}</b> <span class="chip">sempre incluso</span><small>${esc(p.description || '')} · <code>${esc(p.name)}</code></small></span></label>`).join('')}
         ${optional.map((p) => `<label class="check"><input type="checkbox" data-pkg="${esc(p.name)}" ${S.f.packages.includes(p.name) ? 'checked' : ''}><span><b>${esc(p.label)}</b><small>${esc(p.description || '')} · <code>${esc(p.name)}</code></small></span></label>`).join('')}
@@ -234,6 +246,28 @@
       ${field('Cartella di destinazione', 'target', { full: true, ph: '/var/www/mio-negozio', hint: 'Percorso assoluto sul server. Deve essere vuota o non esistere: verrà creata. La document root del sito dovrà puntare a <code>pub/</code>.' })}
       ${actions(false, true)}`;
   }
+
+  /** Tema del negozio (Luma o Hyvä) e checkout. */
+  function frontendSection() {
+    const fe = frontend();
+    const parsed = parseHyva(S.f.hyva_keys);
+    return `<h3>Tema del negozio</h3>
+      <div class="distros">${S.boot.frontends.map((x) => `
+        <label class="distro ${x.id === S.f.frontend ? 'selected' : ''}">
+          <input type="radio" name="frontend" value="${esc(x.id)}" ${x.id === S.f.frontend ? 'checked' : ''}>
+          <h4>${esc(x.name)}</h4><div class="tag">${esc(x.tagline)}</div><p>${esc(x.description)}</p>
+          <ul>${(x.highlights || []).map((h) => `<li>${esc(h)}</li>`).join('')}</ul>
+        </label>`).join('')}</div>
+      ${fe.repository ? `<div class="field full" style="margin-top:18px"><span>Chiavi Hyvä</span>
+        <textarea data-k="hyva_keys" rows="5" spellcheck="false" autocomplete="off" placeholder="composer config --auth http-basic.hyva-themes.repo.packagist.com token …&#10;composer config repositories.private-packagist composer https://hyva-themes.repo.packagist.com/nome-progetto/">${esc(S.f.hyva_keys)}</textarea>
+        <small>Accedi a <a href="https://www.hyva.io" target="_blank" rel="noopener">hyva.io</a>, apri l'area licenze del tuo account e copia il blocco con i comandi <code>composer config</code> (chiave e nome del progetto). Incollalo qui così com'è: l'installer ne ricava solo chiave e progetto.</small>
+        <div id="hyva-parsed">${hyvaParsed(parsed)}</div></div>` : ''}
+      <div class="field full" style="margin-top:18px"><span>Checkout</span>
+        <div class="checks">${fe.checkouts.map((c) => `<label class="check"><input type="radio" name="checkout" value="${esc(c.id)}" ${c.id === S.f.checkout ? 'checked' : ''}><span><b>${esc(c.label)}</b><small>${esc(c.description)}</small></span></label>`).join('')}</div></div>`;
+  }
+  const hyvaParsed = (p) => S.f.hyva_keys.trim() === '' ? '' : p
+    ? `<span class="chip ok">Chiavi riconosciute · progetto ${esc(p.project)} · chiave ${esc(p.key.slice(0, 4))}…</span>`
+    : '<span class="chip fail">Chiavi non riconosciute: servono la chiave e l\'URL del repository con il nome del progetto</span>';
 
   /** Avviso se tra i moduli scelti ce n'è uno che non gira sulla versione di Magento selezionata. */
   function mageosWarning() {
@@ -445,7 +479,7 @@
       <h2>Riepilogo</h2>
       <p class="lead">Controlla i dati: quando premi <b>Installa</b> parte il download e la configurazione. Puoi lasciare la pagina aperta e seguire il log in diretta.</p>
       <div class="recap">
-        <section><h4>${esc(pname())}</h4><dl>${row('Versione', esc(v.version))}${row('Distro', esc(d.name))}${row('Moduli extra', pk.length)}${row('Dati di esempio', f.sample_data ? 'sì' : 'no')}${row('IVA italiana', f.italian_tax ? 'sì' : 'no')}${row('Modalità', esc(f.deploy_mode))}</dl></section>
+        <section><h4>${esc(pname())}</h4><dl>${row('Versione', esc(v.version))}${row('Distro', esc(d.name))}${row('Tema', esc(frontend().name))}${row('Checkout', esc(frontend().checkouts.find((c) => c.id === f.checkout)?.label || ''))}${row('Moduli extra', pk.length)}${row('Dati di esempio', f.sample_data ? 'sì' : 'no')}${row('IVA italiana', f.italian_tax ? 'sì' : 'no')}${row('Modalità', esc(f.deploy_mode))}</dl></section>
         <section><h4>Destinazione</h4><dl>${row('Cartella', esc(f.target))}${row('Base URL', esc(f.base_url))}${row('Admin', esc('/' + f.backend_frontname))}</dl></section>
         <section><h4>Database</h4><dl>${row('Server', esc((S.db?.server || '') + ' ' + (S.db?.version || '')))}${row('Host', esc(f.db_host))}${row('Database', esc(f.db_name))}${row('Utente', esc(f.db_user))}${row('Svuota', f.cleanup_db ? 'sì' : 'no')}</dl></section>
         <section><h4>Ricerca</h4><dl>${row('Motore', esc(f.search_engine))}${row('Host', esc(f.search_host + ':' + f.search_port))}${row('Prefisso', esc(f.search_prefix))}</dl></section>
@@ -671,6 +705,14 @@
       S.req = null;
       updateCounts();
     }));
+    $$('input[name=frontend]', scope).forEach((el) => el.addEventListener('change', () => {
+      S.f.frontend = el.value;
+      S.f.checkout = frontend().checkouts[0].id;
+      renderStep();
+    }));
+    $$('input[name=checkout]', scope).forEach((el) => el.addEventListener('change', () => { S.f.checkout = el.value; }));
+    const keys = $('[data-k=hyva_keys]', scope);
+    if (keys) keys.addEventListener('input', () => { $('#hyva-parsed').innerHTML = hyvaParsed(parseHyva(keys.value)); });
     $$('input[name=distro]', scope).forEach((el) => el.addEventListener('change', () => {
       S.f.distro = el.value;
       S.req = null;
@@ -691,6 +733,7 @@
       if (nav.dataset.nav === 'back') { S.step = Math.max(0, S.step - 1); render(); return; }
       if (S.step === 0) {
         if (!S.f.target.startsWith('/')) { alert('Inserisci un percorso assoluto per la cartella di destinazione.'); return; }
+        if (!hyvaOk()) { alert("Incolla le chiavi Hyvä copiate dall'area licenze di hyva.io."); return; }
         S.req = null;
       }
       if (S.step === 3) {

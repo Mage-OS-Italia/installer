@@ -4,11 +4,12 @@ Installer web per Magento Open Source oppure [Mage-OS](https://mage-os.org), con
 
 ## Cosa fa
 1. Sceglie la piattaforma (Magento Open Source o Mage-OS), la versione e la distro. Le versioni di Magento (2.4.6 e successive) sono lette dal mirror `mirror.mage-os.org`, che serve i pacchetti ufficiali senza chiavi Marketplace; quelle di Mage-OS da `repo.mage-os.org`.
-2. Facoltativo: moduli Mage-OS (blog, resi RMA, SEO…), dati di esempio e regole IVA italiane.
-3. Verifica i requisiti per quella versione: PHP (web e CLI), estensioni, php.ini, Composer, spazio su disco, rete.
-4. Testa database (versioni supportate da Magento) e motore di ricerca (OpenSearch / Elasticsearch).
-5. Raccoglie dati del negozio (URL, lingua, valuta, fuso orario) e dell'utente admin.
-6. Installa in background (`composer create-project`, `composer update`, `setup:install`, configurazione, reindex) con log in diretta.
+2. Tema del negozio: Luma o Hyvä (`catalog/frontend.json`). Con Hyvä si incolla il blocco `composer config` copiato dall'area licenze di hyva.io (se ne ricavano chiave e nome del progetto) e Luma e Blank vengono esclusi con `replace`. Checkout a scelta: Loki Checkout (open source, con Luma e Hyvä) oppure Hyvä Checkout (stesse chiavi, serve la licenza Checkout).
+3. Facoltativo: moduli Mage-OS (blog, resi RMA, SEO…), dati di esempio e regole IVA italiane.
+4. Verifica i requisiti per quella versione: PHP (web e CLI), estensioni, php.ini, Composer, spazio su disco, rete.
+5. Testa database (versioni supportate da Magento) e motore di ricerca (OpenSearch / Elasticsearch).
+6. Raccoglie dati del negozio (URL, lingua, valuta, fuso orario) e dell'utente admin.
+7. Installa in background (`composer create-project`, `composer update`, `setup:install`, configurazione, reindex) con log in diretta.
 
 ## Distro
 Sono file JSON in `distros/`:
