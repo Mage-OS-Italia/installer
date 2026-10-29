@@ -291,6 +291,9 @@ final class Worker
         if ($c['allow_unsupported_db'] && !db_is_supported($this->dbIsMaria, $this->dbVersion)) {
             $this->allowDbVersion();
         }
+        if ($c['sample_data']) {
+            $this->fixSampleMedia();
+        }
         $a = [
             '--base-url=' . $c['base_url'],
             '--db-host=' . $c['db']['host'],
@@ -494,9 +497,6 @@ final class Worker
     private function finalize(): void
     {
         $c = $this->cfg;
-        if ($c['sample_data']) {
-            $this->fixSampleMedia();
-        }
         $this->detail('finalize', 'Indicizzazione…');
         $this->mage('indexer:reindex', false);
         $this->mage('cache:flush');
@@ -521,25 +521,29 @@ final class Worker
         $this->log('✔ Installazione completata in ' . gmdate('i\m s\s', $dur) . '.');
     }
 
-    /** `magento/sample-data-media` annida le immagini quando la cartella esiste già: riporta tutto al suo posto. */
+    /**
+     * `magento/sample-data-media` annida le immagini quando la cartella esiste già (pub/media/downloadable/downloadable…):
+     * riporta tutto al suo posto. Va fatto prima di setup:install, perché i dati di esempio le leggono mentre si caricano.
+     */
     private function fixSampleMedia(): void
     {
         $t = $this->cfg['target'];
         $media = $t . '/vendor/' . platform_of($this->cfg['platform'])['vendor'] . '/sample-data-media';
-        $pairs = [
-            $media . '/catalog/product' => $t . '/pub/media/catalog/product',
-            $media . '/downloadable/files' => $t . '/pub/media/downloadable/files',
-        ];
-        foreach ($pairs as $from => $to) {
-            if (is_dir($from) && !is_dir($to)) {
-                $this->copyTree($from, $to);
-                $this->log("Immagini di esempio copiate in $to");
-            }
+        if (!is_dir($media)) {
+            return;
         }
-        foreach ([$t . '/pub/media/catalog/catalog', $t . '/pub/media/downloadable/downloadable'] as $nested) {
-            if (is_dir($nested)) {
-                rrmdir($nested);
-                $this->log("Rimossa cartella annidata $nested");
+        foreach (scandir($media) ?: [] as $d) {
+            if ($d === '.' || $d === '..' || !is_dir("$media/$d") || $d[0] === '.') {
+                continue;
+            }
+            $to = "$t/pub/media/$d";
+            if (!is_dir($to)) {
+                $this->copyTree("$media/$d", $to);
+                $this->log("Immagini di esempio copiate in $to");
+            } elseif (is_dir("$to/$d")) {
+                $this->copyTree("$media/$d", $to);
+                rrmdir("$to/$d");
+                $this->log("Immagini di esempio riportate al loro posto in $to (cartella annidata rimossa)");
             }
         }
     }
@@ -560,13 +564,33 @@ final class Worker
     /** Esegue bin/magento; se $fatal è true un errore interrompe l'installazione. */
     private function mage(string $args, bool $fatal = true): void
     {
-        $code = $this->run(escapeshellarg($this->php) . ' -d memory_limit=-1 bin/magento ' . $args . ' --no-interaction', $this->cfg['target']);
+        $code = $this->run(escapeshellarg($this->php) . ' -d memory_limit=-1 bin/magento ' . $args . ' --no-interaction', $this->cfg['target'], $this->phpIniEnv());
         if ($code !== 0) {
             if ($fatal) {
                 throw new StepFailure("bin/magento $args è fallito (codice $code).");
             }
             $this->log("⚠ bin/magento $args ha restituito $code, continuo.");
         }
+    }
+
+    /**
+     * `-d memory_limit=-1` vale solo per il processo diretto: deploy:mode:set production lancia
+     * setup:di:compile e static-content-deploy come figli, che si fermerebbero al limite del php.ini.
+     * Un ini aggiuntivo (via PHP_INI_SCAN_DIR) lo toglie anche a loro.
+     */
+    private function phpIniEnv(): array
+    {
+        $dir = $this->dir . '/php-ini';
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0700, true);
+            file_put_contents($dir . '/memory.ini', "memory_limit=-1\n");
+        }
+        $scan = [];
+        if (preg_match('/Scan for additional \.ini files in: "?([^"\n]+)"?/', sh(escapeshellarg($this->php) . ' --ini 2>&1'), $m) && is_dir(trim($m[1]))) {
+            $scan[] = trim($m[1]);
+        }
+        $scan[] = $dir;
+        return ['PHP_INI_SCAN_DIR' => implode(':', $scan)];
     }
 
     private function step(string $id, callable $fn): void
