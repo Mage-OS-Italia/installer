@@ -246,6 +246,7 @@
       <h3>Opzioni</h3>
       <div class="checks">
         ${checkbox('sample_data', 'Installa i dati di esempio', 'Catalogo demo (prodotti, categorie, CMS, regole). Utile per provare il negozio; aggiunge circa 20 pacchetti e alcune centinaia di MB.')}
+        <div id="sample-note">${sampleNote()}</div>
         ${checkbox('italian_tax', 'Imposta le regole IVA italiane', 'Prezzi IVA inclusa, aliquota ordinaria 22% e classi per le aliquote ridotte 10% e 4%. Il calcolo segue l\'indirizzo di spedizione: per vendere ad altri paesi UE aggiungi le rispettive aliquote.')}
       </div>
 
@@ -253,6 +254,10 @@
       ${field('Cartella di destinazione', 'target', { full: true, ph: '/var/www/mio-negozio', hint: 'Percorso assoluto sul server. Deve essere vuota o non esistere: verrà creata. La document root del sito dovrà puntare a <code>pub/</code>.' })}
       ${actions(false, true)}`;
   }
+
+  /** Con Hyvä i dati di esempio richiedono Luma: non lo escludiamo. */
+  const sampleNote = () => S.f.frontend === 'hyva' && S.f.sample_data
+    ? '<div class="notice" style="margin:0">Con Hyvä i dati di esempio richiedono Luma: Luma e Blank restano installati (il tema attivo sarà comunque Hyvä).</div>' : '';
 
   function searchModeBox() {
     const max = S.boot.mysql_search.max_products.toLocaleString('it-IT');
@@ -704,7 +709,7 @@
         if (k.startsWith('search_') && k !== 'search_engine') { S.search = null; const b = $('#search-test'); if (b) b.hidden = true; }
         if (k === 'cleanup_db' || k === 'allow_unsupported_db') updateNext();
         if (['db_host', 'db_name', 'db_user', 'db_password'].includes(k) || k.startsWith('search_')) updateNext();
-        if (k === 'sample_data') S.req = null;
+        if (k === 'sample_data') { S.req = null; const n = $('#sample-note'); if (n) n.innerHTML = sampleNote(); }
         if (k === 'products' || k === 'use_opensearch') {
           const m = $('#search-mode');
           if (m) { m.innerHTML = searchModeBox(); bind(m); }

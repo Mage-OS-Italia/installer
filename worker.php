@@ -285,8 +285,12 @@ final class Worker
             });
         if ($code !== 0 || !is_file($c['target'] . '/bin/magento')) {
             $why = $problems ? "\n" . implode("\n", $problems) : '';
-            if (($c['frontend']['id'] ?? '') === 'hyva' && preg_match('/401|403|authentication|credentials|permissions|could not be found/i', $why)) {
-                $why .= "\nControlla chiave e nome del progetto Hyvä (area licenze su hyva.io): sembra che il repository privato rifiuti l'accesso.";
+            if (($c['frontend']['id'] ?? '') === 'hyva') {
+                if (preg_match('#hyva-themes/magento2-hyva-checkout.*could not be found#i', $why)) {
+                    $why .= "\nIl repository Hyvä non offre Hyvä Checkout: la licenza di questo progetto probabilmente non lo include. Scegli Loki Checkout oppure usa le chiavi di una licenza con Hyvä Checkout.";
+                } elseif (preg_match('/401|403|authentication|credentials|permissions|could not be found/i', $why)) {
+                    $why .= "\nControlla chiave e nome del progetto Hyvä (area licenze su hyva.io): sembra che il repository privato rifiuti l'accesso.";
+                }
             }
             throw new StepFailure("composer update è fallito (codice $code)." . ($why !== '' ? $why : ' Controlla credenziali e disponibilità dei pacchetti.'));
         }
