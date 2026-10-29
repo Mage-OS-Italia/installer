@@ -63,8 +63,17 @@ function platform_versions(string $platform, bool $refresh = false): array
                     $exts[] = substr($name, 4);
                 }
             }
+            // Versioni esatte richieste per pacchetti di terzi: servono a escluderli con "replace" senza
+            // violare i "conflict" del prodotto (es. paypal/module-braintree nelle patch recenti di 2.4.7).
+            $pins = [];
+            foreach ($req as $name => $constraint) {
+                if (!preg_match('#^(php|ext-|lib-|magento/|mage-os/)#', $name) && preg_match('/^\d[\w.\-]*$/', (string)$constraint)) {
+                    $pins[$name] = $constraint;
+                }
+            }
             $versions[$v] = [
                 'version' => $v,
+                'pins' => $pins,
                 'php' => (string)($req['php'] ?? ''),
                 'extensions' => $exts,
                 'time' => isset($prev['time']) ? substr((string)$prev['time'], 0, 10) : null,

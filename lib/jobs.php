@@ -262,6 +262,7 @@ function validate_install(array $in): array
         'distro_config' => (array)($distro['config'] ?? []),
         'replace' => array_values(array_filter(array_merge($replace, (array)($distro[$s('platform') === 'mageos' ? 'replace_mageos' : 'replace'] ?? [])), fn($n) => is_string($n) && preg_match('#^[a-z0-9_.-]+/[a-z0-9_.-]+$#', $n))),
     ];
+    $config['replace_pins'] = $version ? array_intersect_key((array)($version['pins'] ?? []), array_flip($config['replace'])) : [];
     return [$config, $err];
 }
 

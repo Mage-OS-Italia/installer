@@ -242,7 +242,7 @@ final class Worker
             $json['repositories'][$r['id']] = ['type' => 'composer', 'url' => $r['url']];
         }
         foreach ($c['replace'] as $name) {
-            $json['replace'][$name] = '*';
+            $json['replace'][$name] = $c['replace_pins'][$name] ?? '*';
         }
         $require = [];
         foreach ($c['packages'] as $spec) {
