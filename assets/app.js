@@ -633,7 +633,7 @@
       selfRemove();
     } else {
       $('#job-lead').textContent = j.state === 'cancelled' ? 'Installazione annullata' : 'Installazione non riuscita';
-      out.innerHTML = `<div class="notice" style="border-color:rgba(248,113,113,.5);background:rgba(248,113,113,.08);color:#fecaca;margin-bottom:16px"><b>${esc(st.error || 'Errore sconosciuto')}</b><br>Controlla il log qui sotto per il dettaglio. La cartella <code>${esc(S.f.target)}</code> può contenere file parziali: svuotala prima di riprovare.</div>`;
+      out.innerHTML = `<div class="notice" style="border-color:rgba(248,113,113,.5);background:rgba(248,113,113,.08);color:#fecaca;margin-bottom:16px"><b style="white-space:pre-line">${esc(st.error || 'Errore sconosciuto')}</b><br>Controlla il log qui sotto per il dettaglio. La cartella <code>${esc(S.f.target)}</code> può contenere file parziali: svuotala prima di riprovare.</div>`;
       act.innerHTML = `<button class="btn" data-act="copy-log">Copia il log</button><div class="right"><button class="btn primary" data-act="retry">← Torna ai dati</button></div>`;
     }
   }

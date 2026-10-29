@@ -80,14 +80,14 @@ final class Worker
             $this->step('finalize', fn() => $this->finalize());
         } catch (StepFailure $e) {
             $this->status['state'] = $e->getMessage() === 'cancelled' ? 'cancelled' : 'failed';
-            $this->status['error'] = $e->getMessage() === 'cancelled' ? 'Installazione annullata.' : $e->getMessage();
+            $this->status['error'] = $e->getMessage() === 'cancelled' ? 'Installazione annullata.' : str_replace($this->secrets, '••••••', $e->getMessage());
             $this->log('✖ ' . $this->status['error']);
             $this->scrub();
             $this->save();
             return 1;
         } catch (Throwable $e) {
             $this->status['state'] = 'failed';
-            $this->status['error'] = $e->getMessage();
+            $this->status['error'] = str_replace($this->secrets, '••••••', $e->getMessage());
             $this->log('✖ Errore: ' . $e->getMessage());
             $this->scrub();
             $this->save();
@@ -268,9 +268,13 @@ final class Worker
 
         $total = 0;
         $done = 0;
+        $problems = [];
         $code = $this->run($this->composerBase['cmd'] . ' update --no-interaction --no-progress --no-ansi --no-audit',
             $c['target'], $this->composerBase['env'],
-            function (string $line) use (&$total, &$done) {
+            function (string $line) use (&$total, &$done, &$problems) {
+                if (preg_match('/could not be found|not be found|403|401|Invalid credentials|authentication|Your requirements could not|Problem \d|conflict|does not match|no matching package|Could not (?:resolve|find)/i', $line) && count($problems) < 6) {
+                    $problems[] = trim($line);
+                }
                 if (preg_match('/(?:Package|Lock file) operations: (\d+) installs?/', $line, $m)) {
                     $total = max($total, (int)$m[1]);
                 }
@@ -280,7 +284,11 @@ final class Worker
                 }
             });
         if ($code !== 0 || !is_file($c['target'] . '/bin/magento')) {
-            throw new StepFailure("composer update è fallito (codice $code). Controlla credenziali e disponibilità dei pacchetti.");
+            $why = $problems ? "\n" . implode("\n", $problems) : '';
+            if (($c['frontend']['id'] ?? '') === 'hyva' && preg_match('/401|403|authentication|credentials|permissions|could not be found/i', $why)) {
+                $why .= "\nControlla chiave e nome del progetto Hyvä (area licenze su hyva.io): sembra che il repository privato rifiuti l'accesso.";
+            }
+            throw new StepFailure("composer update è fallito (codice $code)." . ($why !== '' ? $why : ' Controlla credenziali e disponibilità dei pacchetti.'));
         }
     }
 
@@ -336,9 +344,18 @@ final class Worker
             $a[] = '--use-secure-admin=1';
         }
         $cmd = escapeshellarg($this->php) . ' -d memory_limit=-1 bin/magento setup:install --no-interaction ' . implode(' ', array_map('escapeshellarg', $a));
-        $code = $this->run($cmd, $c['target'], [], function (string $line) {
+        $flagged = [];
+        $code = $this->run($cmd, $c['target'], [], function (string $line) use (&$flagged) {
             if (preg_match('/\[Progress: (\d+) \/ (\d+)\]/', $line, $m)) {
                 $this->progress('install', (int)$m[1], (int)$m[2], 'operazioni');
+            }
+            // setup:install esce con 0 anche se questi passaggi falliscono: li segnaliamo noi.
+            foreach (['Sample Data is installed with errors' => 'I dati di esempio sono stati installati con errori: controlla var/log/system.log e var/log/exception.log nel progetto.',
+                      'Indexing Error' => 'La ricerca ha rifiutato la creazione degli indici durante l\'installazione: controlla il motore di ricerca.'] as $needle => $msg) {
+                if (str_contains($line, $needle) && empty($flagged[$needle])) {
+                    $flagged[$needle] = true;
+                    $this->warn($msg);
+                }
             }
         });
         if ($code !== 0 || !is_file($c['target'] . '/app/etc/env.php')) {
@@ -498,7 +515,10 @@ final class Worker
     {
         $c = $this->cfg;
         $this->detail('finalize', 'Indicizzazione…');
-        $this->mage('indexer:reindex', false);
+        if (!$this->mage('indexer:reindex', false)) {
+            $this->warn(($c['search']['host'] === '' ? 'Reindex non riuscito' : 'Reindex non riuscito: controlla che ' . ($c['search']['engine'] === 'opensearch' ? 'OpenSearch' : 'Elasticsearch') . ' accetti la creazione degli indici')
+                . '. Rilancialo con bin/magento indexer:reindex (dettagli nel log).');
+        }
         $this->mage('cache:flush');
 
         $dur = (int)round(microtime(true) - $this->t0);
@@ -562,7 +582,7 @@ final class Worker
     // ---------------------------------------------------------------- helpers
 
     /** Esegue bin/magento; se $fatal è true un errore interrompe l'installazione. */
-    private function mage(string $args, bool $fatal = true): void
+    private function mage(string $args, bool $fatal = true): bool
     {
         $code = $this->run(escapeshellarg($this->php) . ' -d memory_limit=-1 bin/magento ' . $args . ' --no-interaction', $this->cfg['target'], $this->phpIniEnv());
         if ($code !== 0) {
@@ -571,6 +591,7 @@ final class Worker
             }
             $this->log("⚠ bin/magento $args ha restituito $code, continuo.");
         }
+        return $code === 0;
     }
 
     /**
