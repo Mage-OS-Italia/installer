@@ -26,7 +26,8 @@
 
   async function api(action, body, query = '') {
     const opts = body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF': CSRF }, body: JSON.stringify(body) };
-    const r = await fetch('?a=' + action + query, opts);
+    let r;
+    try { r = await fetch('?a=' + action + query, opts); } catch (e) { return { error: 'Server non raggiungibile: controlla la connessione e riprova.', _status: 0 }; }
     let data = {};
     try { data = await r.json(); } catch (e) { data = { error: 'Risposta non valida dal server (HTTP ' + r.status + ').' }; }
     if (!r.ok && !data.error) data.error = 'Errore HTTP ' + r.status;
@@ -40,6 +41,17 @@
     t.value = text; t.style.position = 'fixed'; t.style.opacity = '0';
     document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove();
     return Promise.resolve();
+  }
+
+  /** Il job in corso sopravvive al ricaricamento della pagina (solo in questa scheda): id, dati da mostrare e password admin generata. */
+  function saveJob(j) {
+    try {
+      if (!j) sessionStorage.removeItem('mi-job');
+      else sessionStorage.setItem('mi-job', JSON.stringify({ id: j.id, pw: S.f.admin_password, f: { platform: S.f.platform, version: S.f.version, target: S.f.target, frontend: S.f.frontend, checkout: S.f.checkout } }));
+    } catch (e) { /* storage bloccato: si perde solo la ripresa dopo un reload */ }
+  }
+  function loadJob() {
+    try { return JSON.parse(sessionStorage.getItem('mi-job') || 'null'); } catch (e) { return null; }
   }
 
   const basename = (p) => (p || '').replace(/\/+$/, '').split('/').pop() || '';
@@ -95,7 +107,11 @@
   };
   const tooOld = (m) => S.f.platform === 'magento' && !!m.min_magento && vcmp(S.f.version, m.min_magento) < 0;
   const isIncompatible = (m) => (m.incompatible_with || []).includes(S.f.distro) || (!!m.needs_opensearch && useMysql());
-  const selectedMageos = () => S.boot.mageos.filter((m) => S.f.mageos.includes(m.name) && !isIncompatible(m) && !distroPackageNames().includes(m.name));
+  /** Moduli che il prodotto (Mage-OS) richiede già a versione fissa: non si aggiungono. */
+  const inProduct = (m) => (version()?.included || []).includes(m.name);
+  const selectedMageos = () => S.boot.mageos.filter((m) => S.f.mageos.includes(m.name) && !isIncompatible(m) && !distroPackageNames().includes(m.name) && !inProduct(m));
+  const cliPhp = () => S.boot.server.php_cli || '';
+  const tooOldPhp = (m) => !!m.min_php && !!cliPhp() && cliPhp().localeCompare(m.min_php, undefined, { numeric: true }) < 0;
 
   function applyDistroDefaults() {
     const d = distro();
@@ -134,12 +150,23 @@
       target: parent + '/magento-store', base_url: '', store_name: 'Magento Store', backend_frontname: 'admin',
       language: 'it_IT', currency: 'EUR', timezone: 'Europe/Rome',
       db_host: 'localhost', db_name: '', db_user: 'root', db_password: '', db_prefix: '', create_db: true, cleanup_db: false,
-      search_engine: 'opensearch', search_host: 'localhost', search_port: 9200, search_prefix: 'magento2', search_user: '', search_password: '',
+      search_engine: 'opensearch', search_ssl: false, search_host: 'localhost', search_port: 9200, search_prefix: 'magento2', search_user: '', search_password: '',
       admin_firstname: '', admin_lastname: '', admin_email: '', admin_user: 'admin', admin_password: genPassword(),
       deploy_mode: 'developer', allow_unsupported_db: false, disable_2fa: false, install_cron: false, save_auth: true, credentials: {},
     };
     applyDistroDefaults();
     syncDerived();
+    const saved = loadJob();
+    if (saved && /^[a-f0-9]{16}$/.test(saved.id || '')) {
+      const st = await api('status', undefined, `&job=${saved.id}&since=0`);
+      if (st.status) {
+        Object.assign(S.f, saved.f || {}, { admin_password: saved.pw || S.f.admin_password });
+        S.job = { id: saved.id, offset: 0, state: 'running', steps: [], logEl: null, timer: null };
+        S.step = 4;
+      } else {
+        saveJob(null);
+      }
+    }
     render();
   }
 
@@ -247,7 +274,7 @@
       <div class="checks">
         ${checkbox('sample_data', 'Installa i dati di esempio', 'Catalogo demo (prodotti, categorie, CMS, regole). Utile per provare il negozio; aggiunge circa 20 pacchetti e alcune centinaia di MB.')}
         <div id="sample-note">${sampleNote()}</div>
-        ${checkbox('italian_tax', 'Imposta le regole IVA italiane', 'Prezzi IVA inclusa, aliquota ordinaria 22% e classi per le aliquote ridotte 10% e 4%. Il calcolo segue l\'indirizzo di spedizione: per vendere ad altri paesi UE aggiungi le rispettive aliquote.')}
+        ${checkbox('italian_tax', 'Imposta le regole IVA italiane', 'Prezzi IVA inclusa, aliquota ordinaria 22% e classi per le aliquote ridotte 10% e 4%, Italia come paese predefinito. Il calcolo segue l\'indirizzo di spedizione: per vendere ad altri paesi UE aggiungi le rispettive aliquote.')}
       </div>
 
       <h3>Dove installare</h3>
@@ -292,8 +319,10 @@
 
   /** Avviso se tra i moduli scelti ce n'è uno che non gira sulla versione di Magento selezionata. */
   function mageosWarning() {
+    const phpOld = selectedMageos().filter(tooOldPhp);
+    const phpMsg = phpOld.length ? `<div class="notice" style="margin:0 0 14px"><b>PHP ${esc(cliPhp())} troppo vecchio per ${phpOld.map((m) => esc(m.label)).join(', ')}.</b> Serve PHP ${esc(phpOld.reduce((a, m) => (m.min_php.localeCompare(a, undefined, { numeric: true }) > 0 ? m.min_php : a), '0'))} o successivo da riga di comando: deseleziona il modulo o aggiorna il PHP.</div>` : '';
     const old = selectedMageos().filter(tooOld);
-    if (!old.length) return '';
+    if (!old.length) return phpMsg;
     return `<div class="notice" style="margin:0 0 14px"><b>Versione di Magento troppo vecchia per ${old.map((m) => esc(m.label)).join(', ')}.</b> ${old.length === 1 ? 'Richiede' : 'Richiedono'} Magento ${esc(old.reduce((a, m) => (vcmp(m.min_magento, a) > 0 ? m.min_magento : a), '0'))} o successivo: con la versione ${esc(S.f.version)} composer segnalerebbe un conflitto e l'installazione si fermerebbe. Scegli una versione più recente o deseleziona il modulo.</div>`;
   }
 
@@ -305,9 +334,9 @@
       ${fold('mageos', 'Moduli Mage-OS', mageosCount(), `<p class="muted" style="margin:0 0 12px;font-size:13px">Moduli opzionali della community Mage-OS, installabili con qualsiasi distro (da Packagist, senza credenziali).</p>
       ${groups.map((g) => `<div class="group"><h4 class="pkg-group">${esc(g)}</h4><div class="pkg-list">
         ${S.boot.mageos.filter((m) => m.group === g).map((m) => {
-          const included = own.includes(m.name);
+          const included = own.includes(m.name) || inProduct(m);
           const off = isIncompatible(m);
-          return `<label class="check" ${off || included ? 'style="opacity:.6"' : ''}><input type="checkbox" data-mageos="${esc(m.name)}" ${included || S.f.mageos.includes(m.name) ? 'checked' : ''} ${off || included ? 'disabled' : ''}><span><b>${esc(m.label)}</b>${included ? ' <span class="chip">incluso nella distro</span>' : ''}${off ? ` <span class="chip">${m.needs_opensearch && useMysql() ? 'richiede OpenSearch' : 'non disponibile con questa distro'}</span>` : ''}${tooOld(m) ? ` <span class="chip">richiede Magento ${esc(m.min_magento)}+</span>` : ''}<small>${esc(m.description)} · <code>${esc(m.name)}</code></small></span></label>`;
+          return `<label class="check" ${off || included ? 'style="opacity:.6"' : ''}><input type="checkbox" data-mageos="${esc(m.name)}" ${included || S.f.mageos.includes(m.name) ? 'checked' : ''} ${off || included ? 'disabled' : ''}><span><b>${esc(m.label)}</b>${included ? ` <span class="chip">${own.includes(m.name) ? 'incluso nella distro' : 'già incluso in ' + esc(pname()) + ' ' + esc(S.f.version)}</span>` : ''}${off ? ` <span class="chip">${m.needs_opensearch && useMysql() ? 'richiede OpenSearch' : 'non disponibile con questa distro'}</span>` : ''}${tooOld(m) ? ` <span class="chip">richiede Magento ${esc(m.min_magento)}+</span>` : ''}${tooOldPhp(m) ? ` <span class="chip">richiede PHP ${esc(m.min_php)}+</span>` : ''}<small>${esc(m.description)} · <code>${esc(m.name)}</code></small></span></label>`;
         }).join('')}
       </div></div>`).join('')}`)}`;
   }
@@ -365,7 +394,7 @@
   // ------------------------------------------------------------ step 2
   async function testDb() {
     setBox('#db-test', 'warn', '<div class="spinner"></div> Connessione in corso…');
-    S.db = await api('test_db', { host: S.f.db_host, name: S.f.db_name, user: S.f.db_user, password: S.f.db_password, version: S.f.version });
+    S.db = await api('test_db', { host: S.f.db_host, name: S.f.db_name, user: S.f.db_user, password: S.f.db_password, platform: S.f.platform, version: S.f.version });
     setBox('#db-test', S.db.status || 'fail', esc(S.db.message || S.db.error));
     const ub = $('#unsupported-box');
     if (ub) { ub.innerHTML = unsupportedBox(); bind(ub); }
@@ -373,8 +402,9 @@
   }
   async function testSearch(silent) {
     if (!silent) setBox('#search-test', 'warn', '<div class="spinner"></div> Connessione in corso…');
-    S.search = await api('test_search', { host: S.f.search_host, port: S.f.search_port, user: S.f.search_user, password: S.f.search_password, version: S.f.version });
-    if (S.search.status === 'ok' && S.search.engine && !S.touched.search_engine) {
+    S.search = await api('test_search', { host: S.f.search_host, port: S.f.search_port, user: S.f.search_user, password: S.f.search_password, platform: S.f.platform, version: S.f.version });
+    S.f.search_ssl = S.search.scheme === 'https';
+    if (S.search.engine && !S.touched.search_engine) {
       S.f.search_engine = S.search.engine;
       const sel = $('[data-k=search_engine]');
       if (sel) sel.value = S.search.engine;
@@ -410,7 +440,7 @@
 
       ${useMysql() ? `<h3>Motore di ricerca</h3><div class="notice" style="margin:0">Ricerca MySQL (catalogo fino a ${S.f.products.toLocaleString('it-IT')} prodotti): nessun motore da configurare. Per usare OpenSearch torna al primo passo.</div>` : `<h3>Motore di ricerca</h3>
       <div class="grid">
-        ${select('Motore', 'search_engine', [['opensearch', 'OpenSearch'], ['elasticsearch8', 'Elasticsearch 8'], ['elasticsearch7', 'Elasticsearch 7']])}
+        ${select('Motore', 'search_engine', [['opensearch', 'OpenSearch'], ['elasticsearch8', 'Elasticsearch 8'], ...(version()?.es7 ? [['elasticsearch7', 'Elasticsearch 7']] : [])])}
         ${field('Prefisso indice', 'search_prefix')}
         ${field('Host', 'search_host')}
         ${field('Porta', 'search_port', { type: 'number' })}
@@ -483,6 +513,8 @@
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(f.admin_email)) e.push('Email amministratore non valida.');
     if (!/^[A-Za-z0-9_.@-]{3,40}$/.test(f.admin_user)) e.push('Username non valido (almeno 3 caratteri).');
     if (f.admin_password.length < 7 || !/[A-Za-z]/.test(f.admin_password) || !/\d/.test(f.admin_password)) e.push('La password deve avere almeno 7 caratteri, con lettere e numeri.');
+    const need2fa = selectedMageos().filter((m) => m.needs_2fa);
+    if (f.disable_2fa && need2fa.length) e.push(need2fa.map((m) => m.label).join(', ') + " dipend" + (need2fa.length === 1 ? 'e' : 'ono') + " dall'autenticazione a due fattori: disattiva questa opzione o deseleziona il modulo.");
     for (const r of neededRepos()) {
       const c = f.credentials[r.host] || {};
       if (!c.user || !c.password) e.push('Inserisci utente e password per ' + r.host + '.');
@@ -519,6 +551,12 @@
     const f = S.f;
     const payload = { ...f, packages: f.packages, mageos: selectedMageos().map((m) => m.name) };
     const r = await api('start', payload);
+    if (r.busy && r.job) {
+      S.job = { id: r.job, offset: 0, state: 'running', steps: [], logEl: null, timer: null };
+      saveJob(S.job);
+      renderStep();
+      return;
+    }
     if (r.error) {
       btn.disabled = false;
       btn.textContent = '🚀 Installa ' + pname();
@@ -526,6 +564,7 @@
       return;
     }
     S.job = { id: r.job, offset: 0, state: 'running', steps: [], logEl: null, timer: null };
+    saveJob(S.job);
     renderStep();
   }
 
@@ -598,7 +637,17 @@
     polling = true;
     try {
       const r = await api('status', undefined, `&job=${j.id}&since=${j.offset}`);
-      if (r.error) return;
+      const lead = $('#job-lead');
+      if (r.error) {
+        j.fails = (j.fails || 0) + 1;
+        if (j.fails >= 4 && lead) {
+          lead.textContent = (r._status === 403 ? 'Sessione scaduta: ricarica la pagina (e inserisci il token se richiesto). ' : 'Non riesco a raggiungere il server: ' + r.error + ' ')
+            + "L'installazione prosegue in background.";
+        }
+        return;
+      }
+      if (j.fails >= 4 && lead) lead.textContent = `${pname()} ${S.f.version} · ${S.f.target}`;
+      j.fails = 0;
       j.offset = r.offset;
       appendLog(r.log);
       j.steps = r.status.steps || [];
@@ -638,7 +687,7 @@
       selfRemove();
     } else {
       $('#job-lead').textContent = j.state === 'cancelled' ? 'Installazione annullata' : 'Installazione non riuscita';
-      out.innerHTML = `<div class="notice" style="border-color:rgba(248,113,113,.5);background:rgba(248,113,113,.08);color:#fecaca;margin-bottom:16px"><b style="white-space:pre-line">${esc(st.error || 'Errore sconosciuto')}</b><br>Controlla il log qui sotto per il dettaglio. La cartella <code>${esc(S.f.target)}</code> può contenere file parziali: svuotala prima di riprovare.</div>`;
+      out.innerHTML = `<div class="notice" style="border-color:rgba(248,113,113,.5);background:rgba(248,113,113,.08);color:#fecaca;margin-bottom:16px"><b style="white-space:pre-line">${esc(st.error || 'Errore sconosciuto')}</b><br>Controlla il log qui sotto per il dettaglio. ${st.cleaned ? `La cartella <code>${esc(S.f.target)}</code> è stata ripulita: puoi riprovare.` : `La cartella <code>${esc(S.f.target)}</code> può contenere file parziali: svuotala prima di riprovare.`}</div>`;
       act.innerHTML = `<button class="btn" data-act="copy-log">Copia il log</button><div class="right"><button class="btn primary" data-act="retry">← Torna ai dati</button></div>`;
     }
   }
@@ -646,13 +695,14 @@
   /** A installazione riuscita l'installer si cancella da solo; se non ci riesce, resta bloccato e il pulsante manuale. */
   async function selfRemove() {
     const note = $('#self-remove');
-    let ok = false;
-    try { ok = !!(await api('remove', {})).ok; } catch (e) { /* installer già sparito o rete caduta */ }
+    let r = {};
+    try { r = await api('remove', {}); } catch (e) { /* installer già sparito o rete caduta */ }
     if (!note) return;
-    if (ok) {
-      note.textContent = "L'installer è stato eliminato dal server: puoi chiudere questa pagina.";
+    if (r.ok) {
+      saveJob(null);
+      note.textContent = "L'installer è stato eliminato dal server: puoi chiudere questa pagina." + ((r.left || []).length ? ` Nella cartella sono rimasti altri file, non dell'installer: ${r.left.join(', ')}.` : '');
     } else {
-      note.textContent = "Non sono riuscito a eliminare l'installer: è bloccato, rimuovilo a mano o con il pulsante.";
+      note.textContent = "Non sono riuscito a eliminare l'installer" + ((r.failed || []).length ? ` (rimasti: ${r.failed.join(', ')})` : '') + ": è bloccato, cancellalo a mano dal server o riprova con il pulsante.";
       const b = $('[data-act=remove]');
       if (b) b.hidden = false;
     }
@@ -779,14 +829,15 @@
       case 'toggle-eye': setPwVisible(act.parentElement.querySelector('input'), act.parentElement.querySelector('input').type === 'password'); break;
       case 'start': startInstall(act); break;
       case 'cancel': if (confirm("Annullare l'installazione in corso?")) { act.disabled = true; await api('cancel', { job: S.job.id }); } break;
-      case 'retry': S.job = null; S.step = 3; render(); break;
+      case 'retry': S.job = null; saveJob(null); S.step = 3; render(); break;
       case 'copy-log': copy($('#job-log').innerText); act.textContent = 'Copiato ✓'; break;
       case 'reveal-pw': { const s = $('#pw-show'); const hidden = s.textContent.startsWith('•'); s.textContent = hidden ? S.f.admin_password : '••••••••••••'; act.textContent = hidden ? 'Nascondi' : 'Mostra'; break; }
       case 'copy-pw': copy(S.f.admin_password); act.textContent = 'Copiata ✓'; break;
       case 'remove':
         if (confirm("Eliminare definitivamente l'installer dal server?")) {
           const r = await api('remove', {});
-          if (r.ok) root.innerHTML = '<div class="boot"><p>Installer rimosso. Puoi chiudere questa pagina.</p></div>';
+          if (r.ok) { saveJob(null); root.innerHTML = '<div class="boot"><p>Installer rimosso. Puoi chiudere questa pagina.</p></div>'; }
+          else alert('Rimozione non riuscita' + ((r.failed || []).length ? ' (rimasti: ' + r.failed.join(', ') + ')' : '') + ': cancella a mano i file dal server. L\'installer resta bloccato.');
         }
         break;
     }

@@ -6,8 +6,19 @@ require __DIR__ . '/lib/catalog.php';
 require __DIR__ . '/lib/requirements.php';
 require __DIR__ . '/lib/jobs.php';
 
+// Errori dell'ambiente (cartella temporanea non sicura, permessi): un messaggio leggibile invece di una pagina bianca.
+set_exception_handler(function (Throwable $e): void {
+    if (isset($_GET['a'])) {
+        json_out(['error' => $e->getMessage()], 500);
+    }
+    http_response_code(500);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo $e->getMessage();
+});
+
 session_name('magento_installer');
-session_set_cookie_params(['httponly' => true, 'samesite' => 'Strict']);
+ini_set('session.use_strict_mode', '1');
+session_set_cookie_params(['httponly' => true, 'samesite' => 'Strict', 'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off']);
 session_start();
 if (empty($_SESSION['csrf'])) {
     $_SESSION['csrf'] = bin2hex(random_bytes(16));
@@ -17,14 +28,32 @@ header('X-Frame-Options: DENY');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
 
-/** Client locale o in rete privata: accesso libero. Altrimenti serve il token generato sul server. */
+/** Host con cui l'installer si apre su una macchina locale (TLD riservato .test, .localhost, loopback). */
+function is_local_host(string $host): bool
+{
+    $host = strtolower(trim($host));
+    $host = preg_match('/^\[([^\]]+)\](?::\d+)?$/', $host, $m) ? $m[1] : preg_replace('/:\d+$/', '', $host);
+    return $host === 'localhost' || $host === '::1' || preg_match('/\.(test|localhost)$/', $host) === 1
+        || preg_match('/^127(\.\d{1,3}){3}$/', $host) === 1;
+}
+
+/**
+ * Accesso libero solo da loopback, senza proxy davanti e con un Host locale. Un indirizzo privato non basta:
+ * dietro nginx, Docker, un tunnel o un load balancer ogni visitatore arriva da lì. Il controllo sull'Host
+ * ferma il DNS rebinding. In tutti gli altri casi serve il token generato sul server.
+ */
 function is_trusted_client(): bool
 {
     $ip = $_SERVER['REMOTE_ADDR'] ?? '';
-    if ($ip === '127.0.0.1' || $ip === '::1') {
-        return true;
+    if ($ip !== '127.0.0.1' && $ip !== '::1') {
+        return false;
     }
-    return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
+    foreach (['HTTP_X_FORWARDED_FOR', 'HTTP_X_FORWARDED_HOST', 'HTTP_FORWARDED', 'HTTP_X_REAL_IP', 'HTTP_VIA', 'HTTP_CLIENT_IP', 'HTTP_CF_CONNECTING_IP', 'HTTP_TRUE_CLIENT_IP'] as $h) {
+        if (isset($_SERVER[$h])) {
+            return false;
+        }
+    }
+    return is_local_host((string)($_SERVER['HTTP_HOST'] ?? ''));
 }
 
 function token_file(): string
@@ -32,14 +61,16 @@ function token_file(): string
     return app_tmp() . '/access-token';
 }
 
+/** Il token di accesso; '' se non si riesce a scriverlo (in quel caso nessuno può entrare con il token). */
 function access_token(): string
 {
     $f = token_file();
     if (!is_file($f)) {
-        file_put_contents($f, bin2hex(random_bytes(12)));
-        chmod($f, 0600);
+        $old = umask(0077);
+        @file_put_contents($f, bin2hex(random_bytes(12)), LOCK_EX);
+        umask($old);
     }
-    return trim((string)file_get_contents($f));
+    return trim((string)@file_get_contents($f));
 }
 
 $authorized = !empty($_SESSION['authorized']) || is_trusted_client();
@@ -48,8 +79,13 @@ $action = (string)($_GET['a'] ?? '');
 
 // ---- Sblocco con token (accesso da rete pubblica)
 if ($action === 'auth' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-    $given = (string)(request_json()['token'] ?? '');
-    if (hash_equals(access_token(), trim($given))) {
+    $given = trim((string)(request_json()['token'] ?? ''));
+    $token = access_token();
+    if ($token === '') {
+        json_out(['ok' => false, 'error' => 'Impossibile creare il token di accesso in ' . token_file() . ': controlla i permessi.'], 500);
+    }
+    if ($given !== '' && hash_equals($token, $given)) {
+        session_regenerate_id(true);
         $_SESSION['authorized'] = true;
         json_out(['ok' => true]);
     }
@@ -127,16 +163,11 @@ if ($action !== '') {
             }
             json_out(['ok' => true]);
         case 'remove':
-            if (!$post || !is_file(__DIR__ . '/lib/bootstrap.php')) {
+            if (!$post) {
                 json_out(['error' => 'Operazione non consentita.'], 400);
             }
-            $root = realpath(APP_ROOT);
-            if (!$root || $root === '/' || $root === home_dir()) {
-                json_out(['error' => 'Percorso non sicuro.'], 400);
-            }
-            rrmdir(app_tmp());
-            rrmdir($root);
-            json_out(['ok' => true]);
+            $r = remove_installer();
+            json_out($r, $r['ok'] ? 200 : 500);
         default:
             json_out(['error' => 'Azione sconosciuta.'], 404);
     }
@@ -173,7 +204,10 @@ $asset = fn(string $f): string => 'assets/' . $f . '?v=' . filemtime(__DIR__ . '
 document.getElementById('remove-btn').onclick = async () => {
   if (!confirm("Eliminare definitivamente l'installer dal server?")) return;
   const r = await fetch('?a=remove', {method:'POST', headers:{'X-CSRF': <?= json_encode($_SESSION['csrf']) ?>, 'Content-Type':'application/json'}, body:'{}'});
-  document.body.innerHTML = '<main class="gate"><div class="card gate-card"><h1>Installer rimosso</h1><p>Puoi chiudere questa pagina.</p></div></main>';
+  const d = await r.json().catch(() => ({}));
+  const msg = d.ok ? '<h1>Installer rimosso</h1><p>Puoi chiudere questa pagina.</p>'
+    : '<h1>Rimozione non riuscita</h1><p>Non sono riuscito a eliminare: ' + (d.failed || []).map((f) => f.replace(/[<>&]/g, '')).join(', ') + '. Cancellali a mano dal server; l\'installer resta bloccato.</p>';
+  document.body.innerHTML = '<main class="gate"><div class="card gate-card">' + msg + '</div></main>';
 };
 </script>
 <?php elseif (!$authorized): ?>
@@ -181,7 +215,7 @@ document.getElementById('remove-btn').onclick = async () => {
   <div class="card gate-card">
     <img src="assets/logo.svg" alt="Magento Installer">
     <h1>Accesso protetto</h1>
-    <p>Questo installer è raggiunto da una rete pubblica. Per continuare inserisci il token di accesso.</p>
+    <p>Questo installer non è stato aperto da un indirizzo locale (o passa da un proxy): per continuare inserisci il token di accesso.</p>
     <p class="muted">Lo trovi sul server nel file:<br><code><?= h(token_file()) ?></code></p>
     <form id="auth-form">
       <input type="password" id="token" placeholder="Token di accesso" autocomplete="off" autofocus>
@@ -194,7 +228,7 @@ document.getElementById('remove-btn').onclick = async () => {
 document.getElementById('auth-form').onsubmit = async (e) => {
   e.preventDefault();
   const r = await fetch('?a=auth', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({token: document.getElementById('token').value})});
-  if (r.ok) location.reload(); else document.getElementById('auth-err').textContent = 'Token errato.';
+  if (r.ok) location.reload(); else document.getElementById('auth-err').textContent = (await r.json().catch(() => ({}))).error || 'Token errato.';
 };
 </script>
 <?php else: ?>

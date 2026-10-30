@@ -36,6 +36,8 @@ final class Worker
     private bool $targetClean = false;
     private bool $targetCreated = false;
     private bool $dbCreated = false;
+    /** Il di.xml del prodotto non ammette il database in uso e l'utente ha scelto "Procedi comunque". */
+    private bool $needsDbOverride = false;
 
     private const STEPS = [
         'preflight' => 'Verifica ambiente e database',
@@ -50,6 +52,8 @@ final class Worker
     {
         $this->dir = job_dir($id);
         $this->cfg = json_decode((string)file_get_contents($this->dir . '/job.json'), true);
+        // Da qui le credenziali vivono solo in memoria: un worker ucciso (OOM, riavvio) non lascia il file in chiaro.
+        @unlink($this->dir . '/job.json');
         $this->php = find_php_cli() ?? PHP_BINARY;
         $this->t0 = microtime(true);
         foreach ([$this->cfg['db']['password'], $this->cfg['admin']['password'], $this->cfg['search']['password']] as $s) {
@@ -57,6 +61,12 @@ final class Worker
         }
         foreach ($this->cfg['credentials'] as $c) {
             $this->secrets[] = $c['password'];
+        }
+        // Anche nella forma che assumono dentro un comando (apici escapati) e, se corte, solo come argomento esatto (vedi $shown in install()).
+        foreach ($this->secrets as $s) {
+            if ($s !== '' && escapeshellarg($s) !== "'$s'") {
+                $this->secrets[] = substr(escapeshellarg($s), 1, -1);
+            }
         }
         $this->secrets = array_values(array_filter(array_unique($this->secrets), fn($s) => strlen($s) >= 3));
 
@@ -67,7 +77,8 @@ final class Worker
             }
             $steps[] = ['id' => $sid, 'label' => $label, 'state' => 'pending', 'detail' => '', 'progress' => null];
         }
-        $this->status = ['state' => 'running', 'pid' => getmypid(), 'started' => time(), 'steps' => $steps];
+        $this->status = ['state' => 'running', 'pid' => getmypid(), 'started' => time(), 'steps' => $steps,
+            'info' => ['platform' => $this->cfg['platform'], 'version' => $this->cfg['version'], 'target' => $this->cfg['target']]];
         $this->save();
     }
 
@@ -114,6 +125,9 @@ final class Worker
         if (is_dir($c['target']) && count(array_diff(scandir($c['target']) ?: [], ['.', '..'])) > 0) {
             throw new StepFailure('La cartella di destinazione non è più vuota: ' . $c['target']);
         }
+        if (!is_writable(APP_ROOT)) {
+            throw new StepFailure('Il processo PHP non può scrivere nella cartella dell\'installer (' . APP_ROOT . '): servirebbe per il blocco finale. Correggi i permessi.');
+        }
         $this->targetCreated = !is_dir($c['target']);
         $this->targetClean = true;
 
@@ -127,7 +141,7 @@ final class Worker
         $this->dbIsMaria = stripos($raw, 'mariadb') !== false;
         preg_match('/^(\d+\.\d+\.\d+)/', $raw, $vm);
         $this->dbVersion = $vm[1] ?? '';
-        if (!db_is_supported($this->dbIsMaria, $this->dbVersion)) {
+        if (!db_is_supported($this->dbIsMaria, $this->dbVersion, $c['platform'], $c['version'])) {
             if (!$c['allow_unsupported_db']) {
                 throw new StepFailure(($this->dbIsMaria ? 'MariaDB ' : 'MySQL ') . $this->dbVersion . ' non è supportato da ' . platform_of($c['platform'])['name'] . '.');
             }
@@ -275,13 +289,26 @@ final class Worker
         }
         file_put_contents($file, json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
 
+        $this->log('Nota: il blocco di Composer 2.9+ sulle versioni con advisory di sicurezza è disattivato (COMPOSER_NO_SECURITY_BLOCKING): le release vecchie di Magento dipendono da librerie con advisory noti, quindi installa le patch più recenti appena puoi.');
         $total = 0;
         $done = 0;
         $problems = [];
-        $code = $this->run($this->composerBase['cmd'] . ' update --no-interaction --no-progress --no-ansi --no-audit',
+        $inProblem = 0;
+        // In produzione niente phpunit, MFTF e simili.
+        $code = $this->run($this->composerBase['cmd'] . ' update --no-interaction --no-progress --no-ansi --no-audit' . ($c['deploy_mode'] === 'production' ? ' --no-dev' : ''),
             $c['target'], $this->composerBase['env'],
-            function (string $line) use (&$total, &$done, &$problems) {
-                if (preg_match('/could not be found|not be found|403|401|Invalid credentials|authentication|Your requirements could not|Problem \d|conflict|does not match|no matching package|Could not (?:resolve|find)/i', $line) && count($problems) < 6) {
+            function (string $line) use (&$total, &$done, &$problems, &$inProblem) {
+                // Sotto "Problem N" Composer scrive il motivo nelle righe "- ...": sono quelle che spiegano cosa è successo.
+                if (preg_match('/^\s*Problem \d/', $line)) {
+                    $inProblem = 3;
+                } elseif ($inProblem > 0 && preg_match('/^\s+- /', $line)) {
+                    $inProblem--;
+                    if (count($problems) < 8) {
+                        $problems[] = trim($line);
+                    }
+                    return;
+                }
+                if (preg_match('/could not be found|not be found|403|401|Invalid credentials|authentication|Your requirements could not|Problem \d|conflict|does not match|no matching package|Could not (?:resolve|find)/i', $line) && count($problems) < 8) {
                     $problems[] = trim($line);
                 }
                 if (preg_match('/(?:Package|Lock file) operations: (\d+) installs?/', $line, $m)) {
@@ -301,15 +328,42 @@ final class Worker
                     $why .= "\nControlla chiave e nome del progetto Hyvä (area licenze su hyva.io): sembra che il repository privato rifiuti l'accesso.";
                 }
             }
+            if (preg_match('/security advisories/i', $why)) {
+                $why .= "\nUn pacchetto richiesto ha advisory di sicurezza e Composer lo ha escluso: scegli una versione più recente.";
+            }
             throw new StepFailure("composer update è fallito (codice $code)." . $this->diskHint() . ($why !== '' ? $why : ' Controlla credenziali e disponibilità dei pacchetti.'));
         }
+        $this->checkDbAgainstProduct();
+    }
+
+    /**
+     * Il verdetto definitivo sul database: i pattern ammessi stanno nel di.xml del prodotto appena installato e
+     * cambiano da una release e da una patch all'altra. Qui si è ancora prima di setup:install, quindi un rifiuto
+     * si ripulisce (cartella e database creati) senza lasciare un'installazione a metà.
+     */
+    private function checkDbAgainstProduct(): void
+    {
+        $patterns = db_patterns_from_di((string)@file_get_contents($this->cfg['target'] . '/app/etc/di.xml'));
+        $name = ($this->dbIsMaria ? 'MariaDB ' : 'MySQL ') . $this->dbVersion;
+        if ($patterns === null) {
+            $this->log("⚠ di.xml senza supportedVersionPatterns: non posso verificare che $name sia ammesso.");
+            return;
+        }
+        if (db_version_in_patterns($patterns, $this->dbIsMaria, $this->dbVersion)) {
+            return;
+        }
+        if (!$this->cfg['allow_unsupported_db']) {
+            throw new StepFailure("$name non è supportato da " . platform_of($this->cfg['platform'])['name'] . ' ' . $this->cfg['version']
+                . ' (Magento rifiuterebbe l\'installazione). Usa un database tra quelli ammessi da questa versione, oppure scegline una più recente.');
+        }
+        $this->needsDbOverride = true;
     }
 
     private function install(): void
     {
         $c = $this->cfg;
         // Dopo composer: l'update può riscrivere app/etc/di.xml (magento-force: override).
-        if ($c['allow_unsupported_db'] && !db_is_supported($this->dbIsMaria, $this->dbVersion)) {
+        if ($this->needsDbOverride) {
             $this->allowDbVersion();
         }
         if ($c['sample_data']) {
@@ -342,7 +396,7 @@ final class Worker
         if ($c['search']['host'] !== '') {
             $a[] = '--search-engine=' . $c['search']['engine'];
             $se = $c['search']['engine'] === 'opensearch' ? 'opensearch' : 'elasticsearch';
-            $a[] = "--$se-host=" . $c['search']['host'];
+            $a[] = "--$se-host=" . ($c['search']['ssl'] ? 'https://' : '') . $c['search']['host'];
             $a[] = "--$se-port=" . $c['search']['port'];
             $a[] = "--$se-index-prefix=" . $c['search']['prefix'];
             if ($c['search']['user'] !== '') {
@@ -356,7 +410,14 @@ final class Worker
             $a[] = '--base-url-secure=' . $c['base_url'];
             $a[] = '--use-secure-admin=1';
         }
-        $cmd = escapeshellarg($this->php) . ' -d memory_limit=-1 bin/magento setup:install --no-interaction ' . implode(' ', array_map('escapeshellarg', $a));
+        // Gli argomenti (password comprese) passano da un file 0600 letto da lib/magento-cli.php: così non compaiono in `ps`.
+        $argsFile = $this->dir . '/install-args.json';
+        $old = umask(0077);
+        file_put_contents($argsFile, json_encode(['cwd' => $c['target'], 'args' => array_merge(['setup:install', '--no-interaction'], $a)], JSON_UNESCAPED_SLASHES));
+        umask($old);
+        $cmd = escapeshellarg($this->php) . ' -d memory_limit=-1 ' . escapeshellarg(APP_ROOT . '/lib/magento-cli.php') . ' ' . escapeshellarg($argsFile);
+        $shown = 'bin/magento setup:install --no-interaction ' . implode(' ', array_map(
+            fn($x) => preg_match('/^(--[a-z-]*password)=/', $x, $pm) ? $pm[1] . '=••••••' : $x, $a));
         $flagged = [];
         $code = $this->run($cmd, $c['target'], [], function (string $line) use (&$flagged) {
             if (preg_match('/\[Progress: (\d+) \/ (\d+)\]/', $line, $m)) {
@@ -370,7 +431,8 @@ final class Worker
                     $this->warn($msg);
                 }
             }
-        });
+        }, $shown);
+        @unlink($argsFile);
         if ($code !== 0 || !is_file($c['target'] . '/app/etc/env.php')) {
             throw new StepFailure("setup:install è fallito (codice $code)." . $this->diskHint() . ' Controlla il log qui sopra.');
         }
@@ -465,6 +527,9 @@ final class Worker
     {
         $c = $this->cfg;
         $conf = [
+            // Fuori dalla distro Italiana restano gli Stati Uniti: carrello senza IVA e checkout con il paese sbagliato.
+            'tax/defaults/country' => 'IT',
+            'general/country/default' => 'IT',
             'tax/calculation/price_includes_tax' => 1,
             'tax/calculation/shipping_includes_tax' => 1,
             'tax/calculation/apply_after_discount' => 1,
@@ -550,7 +615,10 @@ final class Worker
             'mode' => $c['deploy_mode'],
             'warnings' => $warnings,
         ];
-        @file_put_contents(APP_ROOT . '/.installed', date('c') . "\n" . $c['target'] . "\n");
+        if (@file_put_contents(APP_ROOT . '/.installed', date('c') . "\n" . $c['target'] . "\n") === false) {
+            $this->warn('Non sono riuscito a creare il blocco ' . APP_ROOT . '/.installed: elimina a mano la cartella dell\'installer dal server, altrimenti resta riutilizzabile.');
+            $this->status['result']['warnings'] = array_merge($this->status['result']['warnings'], [end($this->warnings)]);
+        }
         $this->log('✔ Installazione completata in ' . gmdate('i\m s\s', $dur) . '.');
     }
 
@@ -746,14 +814,14 @@ final class Worker
         }
         if ($msg !== 'Pulizia:') {
             $this->log($msg . '.');
+            $this->status['cleaned'] = true;
         }
     }
 
     /** A job concluso non servono più le password in chiaro. */
     private function scrub(): void
     {
-        @unlink($this->dir . '/job.json');
-        rrmdir($this->dir . '/composer-home');
+        scrub_job_dir($this->dir);
     }
 
     private function cancelled(): bool
@@ -761,10 +829,23 @@ final class Worker
         return file_exists($this->dir . '/cancel');
     }
 
-    /** Esegue un comando in streaming: ogni riga va nel log, $onLine la riceve per estrarre l'avanzamento. */
-    private function run(string $cmd, string $cwd, array $env = [], ?callable $onLine = null): int
+    /** Ferma un processo e i suoi figli (deploy:mode:set, setup:di:compile, static-content:deploy…), prima i figli. */
+    private function killTree(int $pid, int $signal): void
     {
-        $this->log('$ ' . preg_replace('/\s+/', ' ', mb_strimwidth($cmd, 0, 260, '…')));
+        if ($pid <= 1) {
+            return;
+        }
+        foreach (preg_split('/\s+/', sh('pgrep -P ' . $pid), -1, PREG_SPLIT_NO_EMPTY) ?: [] as $child) {
+            $this->killTree((int)$child, $signal);
+        }
+        function_exists('posix_kill') ? @posix_kill($pid, $signal) : sh('kill -' . $signal . ' ' . $pid);
+    }
+
+    /** Esegue un comando in streaming: ogni riga va nel log, $onLine la riceve per estrarre l'avanzamento. */
+    private function run(string $cmd, string $cwd, array $env = [], ?callable $onLine = null, ?string $display = null): int
+    {
+        // $display è la riga da mostrare quando il comando vero contiene dati riservati: va già costruita senza segreti.
+        $this->log('$ ' . preg_replace('/\s+/', ' ', mb_strimwidth($display ?? $cmd, 0, 260, '…')));
         $p = proc_open('exec ' . $cmd, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $cwd, shell_env($env));
         if (!is_resource($p)) {
             throw new StepFailure('Impossibile eseguire il comando.');
@@ -805,9 +886,10 @@ final class Worker
                 }
             }
             if ($this->cancelled()) {
-                proc_terminate($p, 15);
+                $pid = (int)(proc_get_status($p)['pid'] ?? 0);
+                $this->killTree($pid, 15);
                 sleep(1);
-                proc_terminate($p, 9);
+                $this->killTree($pid, 9);
                 proc_close($p);
                 throw new StepFailure('cancelled');
             }

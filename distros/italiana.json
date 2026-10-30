@@ -30,7 +30,7 @@
             "constraint": "^2.5",
             "required": true,
             "label": "Resi (RMA)",
-            "description": "Gestione dei resi, obbligatoria per i negozi italiani. Da Mage-OS."
+            "description": "Gestione dei resi, utile per il diritto di recesso dei negozi italiani. Da Mage-OS."
         },
         {
             "name": "threecommerce/m2-language-it-it",

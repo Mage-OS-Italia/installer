@@ -136,6 +136,8 @@ function run_requirements(array $p): array
         $fs[] = chk('disk', 'Spazio su disco', $free >= 6 * 1024 ** 3 ? 'ok' : ($free >= 3 * 1024 ** 3 ? 'warn' : 'fail'),
             human_bytes($free) . ' liberi', 'Servono circa 3 GB (6 GB consigliati, più i dati di esempio).');
     }
+    $fs[] = chk('installer_dir', 'Cartella dell\'installer', is_writable(APP_ROOT) ? 'ok' : 'fail', APP_ROOT,
+        'Il processo PHP deve poterci scrivere: a fine installazione crea il blocco .installed e si elimina. Se i file appartengono a un altro utente correggi proprietario o permessi.');
     $fs[] = chk('tmp', 'Cartella di lavoro dell\'installer', is_writable(app_tmp()) ? 'ok' : 'fail', app_tmp(), 'Deve essere scrivibile per job e log.');
     $groups[] = ['title' => 'File system', 'checks' => $fs];
 
@@ -184,19 +186,68 @@ function server_info(): array
     ];
 }
 
-/** Versioni di database accettate da Magento 2.4.x recente (SqlVersionProvider). */
-const DB_SUPPORTED_HUMAN = [
-    'mysql' => '8.0 – 8.4',
-    'mariadb' => '10.2 – 10.6, 10.11, 11.4 – 11.8, 12.2 – 12.3',
-];
-
-function db_is_supported(bool $isMaria, string $num): bool
+/** Versioni di database accettate (SqlVersionProvider), per l'elenco mostrato nel wizard. */
+function db_supported_human(string $platform = 'magento', string $version = ''): array
 {
-    $patterns = $isMaria
-        ? ['/^10\.[2-6]\./', '/^10\.11\./', '/^11\.[4-8]\./', '/^12\.[2-3]\./']
-        : ['/^8\.[0-4]\./'];
+    return db_wide($platform, $version)
+        ? ['mysql' => '8.0 – 8.4', 'mariadb' => '10.2 – 10.11, 11.x, 12.x']
+        : ['mysql' => '8.0, 8.4', 'mariadb' => '10.2 – 10.6, 10.11, 11.4 – 11.8, 12.2 – 12.3'];
+}
+
+/** Da Mage-OS 3.1 il di.xml accetta intere serie di MariaDB e MySQL 8.0 – 8.4. */
+function db_wide(string $platform, string $version): bool
+{
+    return $platform === 'mageos' && $version !== '' && version_compare($version, '3.1.0', '>=');
+}
+
+/**
+ * Controllo preliminare, prima di scaricare: si ferma solo ciò che nessuna versione accetta. Ogni release di Magento ha
+ * i suoi pattern (2.4.8 non ammette MariaDB 10.11, 2.4.9 sì): il verdetto definitivo lo dà `db_version_in_patterns()`
+ * sul di.xml appena installato.
+ */
+function db_is_supported(bool $isMaria, string $num, string $platform = 'magento', string $version = ''): bool
+{
+    if (db_wide($platform, $version)) {
+        $patterns = $isMaria ? ['/^(10\.([2-9]|1[01])|11|12)\./'] : ['/^8\.[0-4]\./'];
+    } else {
+        $patterns = $isMaria
+            ? ['/^10\.[2-6]\./', '/^10\.11\./', '/^11\.[4-8]\./', '/^12\.[2-3]\./']
+            : ['/^8\.[04]\./'];
+    }
     foreach ($patterns as $re) {
         if (preg_match($re, $num . '.')) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Pattern `supportedVersionPatterns` letti da un app/etc/di.xml. Ritorna [mysql => [...], mariadb => [...]]
+ * con le espressioni regolari (senza delimitatori), o null se il blocco non c'è.
+ */
+function db_patterns_from_di(string $xml): ?array
+{
+    $pos = strpos($xml, 'supportedVersionPatterns');
+    if ($pos === false) {
+        return null;
+    }
+    $end = strpos($xml, '</argument>', $pos);
+    $block = substr($xml, $pos, $end === false ? null : $end - $pos);
+    $out = ['mysql' => [], 'mariadb' => []];
+    if (preg_match_all('#<item name="(MySQL|MariaDB)-[^"]*"[^>]*>([^<]+)</item>#', $block, $m, PREG_SET_ORDER)) {
+        foreach ($m as $row) {
+            $out[strtolower($row[1])][] = trim(html_entity_decode($row[2]));
+        }
+    }
+    return $out['mysql'] || $out['mariadb'] ? $out : null;
+}
+
+/** La versione del database rientra in uno dei pattern del prodotto? */
+function db_version_in_patterns(array $patterns, bool $isMaria, string $num): bool
+{
+    foreach ($patterns[$isMaria ? 'mariadb' : 'mysql'] as $re) {
+        if (@preg_match('#' . $re . '#', $num . '.')) {
             return true;
         }
     }
@@ -226,8 +277,9 @@ function test_db(array $p): array
     preg_match('/^(\d+\.\d+\.\d+)/', $raw, $m);
     $num = $m[1] ?? '0.0.0';
     $res = ['server' => $isMaria ? 'MariaDB' : 'MySQL', 'version' => $num, 'raw' => $raw];
-    if (!db_is_supported($isMaria, $num)) {
-        $list = $isMaria ? DB_SUPPORTED_HUMAN['mariadb'] : DB_SUPPORTED_HUMAN['mysql'];
+    $platform = (string)($p['platform'] ?? 'magento');
+    if (!db_is_supported($isMaria, $num, $platform, (string)($p['version'] ?? ''))) {
+        $list = db_supported_human($platform, (string)($p['version'] ?? ''))[$isMaria ? 'mariadb' : 'mysql'];
         return $res + ['status' => 'fail', 'unsupported' => true,
             'message' => $res['server'] . " $num non è supportato da Magento. Versioni supportate: $list."];
     }
@@ -264,7 +316,7 @@ function db_connect(string $host, string $user, string $pass, ?string $dbname = 
     return new PDO($dsn, $user, $pass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 5]);
 }
 
-/** Test del motore di ricerca (OpenSearch / Elasticsearch). */
+/** Test del motore di ricerca (OpenSearch / Elasticsearch). Prova http e poi https (OpenSearch 2.12+ ha la sicurezza attiva di serie). */
 function test_search(array $p): array
 {
     $host = trim((string)($p['host'] ?? ''));
@@ -276,7 +328,13 @@ function test_search(array $p): array
     if (!empty($p['user'])) {
         $headers[] = 'Authorization: Basic ' . base64_encode($p['user'] . ':' . ($p['password'] ?? ''));
     }
+    $scheme = 'http';
     $r = http_get("http://$host:$port/", 5, $headers);
+    if (!$r['ok']) {
+        // Un certificato autogenerato è la norma su OpenSearch con la sicurezza di default: qui si verifica solo che risponda.
+        $r = http_get("https://$host:$port/", 5, $headers, false, false);
+        $scheme = 'https';
+    }
     if (!$r['ok']) {
         return ['status' => 'fail', 'message' => "Nessuna risposta da $host:$port" . ($r['error'] ? ' (' . $r['error'] . ')' : '') . '.'];
     }
@@ -293,8 +351,12 @@ function test_search(array $p): array
     $major = (int)$num;
     $engine = $isOs ? 'opensearch' : ($major >= 8 ? 'elasticsearch8' : 'elasticsearch7');
     $label = ($isOs ? 'OpenSearch ' : 'Elasticsearch ') . $num;
+    $extra = ['engine' => $engine, 'scheme' => $scheme];
     if (version_compare($num, $min, '<')) {
-        return ['status' => 'fail', 'engine' => $engine, 'message' => "$label è troppo vecchio: serve almeno $min."];
+        return ['status' => 'fail', 'message' => "$label è troppo vecchio: serve almeno $min."] + $extra;
     }
-    return ['status' => 'ok', 'engine' => $engine, 'version' => $num, 'message' => "$label raggiungibile."];
+    if ($engine === 'elasticsearch7' && !empty($p['version']) && !es7_supported((string)($p['platform'] ?? 'magento'), (string)$p['version'])) {
+        return ['status' => 'fail', 'message' => "$label non è supportato da questa versione: il modulo Elasticsearch 7 è stato tolto. Usa OpenSearch o Elasticsearch 8."] + $extra;
+    }
+    return ['status' => 'ok', 'version' => $num, 'message' => "$label raggiungibile" . ($scheme === 'https' ? ' (HTTPS).' : '.')] + $extra;
 }

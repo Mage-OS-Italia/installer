@@ -29,7 +29,7 @@ function platform_versions(string $platform, bool $refresh = false): array
 {
     $p = PLATFORMS[$platform];
     $pkg = $p['vendor'] . '/product-community-edition';
-    $cache = app_tmp('cache') . "/versions-$platform.json";
+    $cache = app_tmp('cache') . "/versions-$platform-v2.json";
     if (!$refresh && is_file($cache) && filemtime($cache) > time() - 3600) {
         $data = json_decode((string)file_get_contents($cache), true);
         if (is_array($data) && $data) {
@@ -71,9 +71,25 @@ function platform_versions(string $platform, bool $refresh = false): array
                     $pins[$name] = $constraint;
                 }
             }
+            // `conflict` senza una versione fissata nei require (es. paypal/module-braintree >=4.7.0 su 2.4.7-p6…p9):
+            // per escludere il pacchetto con "replace" basta limitarlo alle versioni che non confliggono.
+            foreach ((array)($prev['conflict'] ?? []) as $name => $constraint) {
+                if (!isset($pins[$name]) && !isset($req[$name]) && preg_match('/^>=\s*(\d[\w.\-]*)$/', trim((string)$constraint), $cm)) {
+                    $pins[$name] = '<' . $cm[1];
+                }
+            }
+            // Moduli Mage-OS che il prodotto richiede già (a versione fissa): il catalogo non deve riaggiungerli.
+            $included = [];
+            foreach ($req as $name => $constraint) {
+                if (str_starts_with($name, 'mage-os/')) {
+                    $included[] = $name;
+                }
+            }
             $versions[$v] = [
                 'version' => $v,
                 'pins' => $pins,
+                'included' => $included,
+                'es7' => es7_supported($platform, $v),
                 'php' => (string)($req['php'] ?? ''),
                 'extensions' => $exts,
                 'time' => isset($prev['time']) ? substr((string)$prev['time'], 0, 10) : null,
@@ -95,7 +111,16 @@ function platform_versions(string $platform, bool $refresh = false): array
     }
     return ['source' => 'fallback', 'versions' => [[
         'version' => $p['fallback'], 'php' => $p['fallback_php'], 'extensions' => FALLBACK_EXTENSIONS, 'time' => null,
+        'pins' => [], 'included' => [], 'es7' => es7_supported($platform, $p['fallback']),
     ]]];
+}
+
+/** Il modulo Elasticsearch7 c'è fino a Magento 2.4.7 (Mage-OS 1.x); dopo restano Elasticsearch 8 e OpenSearch. */
+function es7_supported(string $platform, string $version): bool
+{
+    return $platform === 'mageos'
+        ? version_compare($version, '2.0.0', '<')
+        : version_compare((string)preg_replace('/-p\d+$/', '', $version), '2.4.8', '<');
 }
 
 function find_version(string $platform, string $v): ?array

@@ -47,19 +47,24 @@ function validate_install(array $in): array
     $target = rtrim($s('target'), '/');
     if ($target === '' || $target[0] !== '/' || str_contains($target, '..') || preg_match('/[\0\n\r]/', $target)) {
         $err[] = 'La cartella di destinazione deve essere un percorso assoluto.';
-    } elseif ($target === '/' || $target === home_dir() || str_starts_with(APP_ROOT . '/', $target . '/')) {
-        $err[] = 'La cartella di destinazione non può contenere l\'installer.';
-    } elseif (str_starts_with($target . '/', rtrim(APP_ROOT, '/') . '/')) {
-        $err[] = 'La cartella di destinazione non può stare dentro quella dell\'installer (verrebbe cancellata con lui).';
-    } elseif (is_dir($target) && count(array_diff(scandir($target) ?: [], ['.', '..'])) > 0) {
-        $err[] = 'La cartella di destinazione non è vuota.';
     } else {
-        $parent = is_dir($target) ? $target : dirname($target);
-        while ($parent !== '/' && !is_dir($parent)) {
-            $parent = dirname($parent);
-        }
-        if (!is_writable($parent)) {
-            $err[] = "Il processo PHP non può scrivere in $parent: scegli un'altra cartella o correggi i permessi.";
+        // Confronti su percorsi risolti (link, `//`, maiuscole su macOS), non sulle stringhe digitate.
+        $target = normalize_path($target);
+        $installer = normalize_path(APP_ROOT);
+        if ($target === '/' || path_key($target) === path_key(normalize_path(home_dir())) || path_within($installer, $target)) {
+            $err[] = 'La cartella di destinazione non può contenere l\'installer.';
+        } elseif (path_within($target, $installer)) {
+            $err[] = 'La cartella di destinazione non può stare dentro quella dell\'installer (verrebbe cancellata con lui).';
+        } elseif (is_dir($target) && count(array_diff(scandir($target) ?: [], ['.', '..'])) > 0) {
+            $err[] = 'La cartella di destinazione non è vuota.';
+        } else {
+            $parent = is_dir($target) ? $target : dirname($target);
+            while ($parent !== '/' && !is_dir($parent)) {
+                $parent = dirname($parent);
+            }
+            if (!is_writable($parent)) {
+                $err[] = "Il processo PHP non può scrivere in $parent: scegli un'altra cartella o correggi i permessi.";
+            }
         }
     }
 
@@ -110,13 +115,15 @@ function validate_install(array $in): array
     }
     $useMysql = $products >= 1 && $products <= (int)$ms['max_products'] && empty($in['use_opensearch']);
     if ($useMysql) {
-        $search = ['engine' => $ms['engine'], 'host' => '', 'port' => 0, 'prefix' => '', 'user' => '', 'password' => ''];
+        $search = ['engine' => $ms['engine'], 'ssl' => false, 'host' => '', 'port' => 0, 'prefix' => '', 'user' => '', 'password' => ''];
     } else {
         $engine = $s('search_engine');
         if (!in_array($engine, ['opensearch', 'elasticsearch8', 'elasticsearch7'], true)) {
             $err[] = 'Motore di ricerca non valido.';
+        } elseif ($engine === 'elasticsearch7' && $version && !es7_supported($s('platform'), $version['version'])) {
+            $err[] = 'Elasticsearch 7 non è supportato da ' . $platform['name'] . ' ' . $version['version'] . ': usa OpenSearch o Elasticsearch 8.';
         }
-        $search = ['engine' => $engine, 'host' => $s('search_host'), 'port' => (int)($in['search_port'] ?? 9200),
+        $search = ['engine' => $engine, 'ssl' => !empty($in['search_ssl']), 'host' => $s('search_host'), 'port' => (int)($in['search_port'] ?? 9200),
             'prefix' => $s('search_prefix') ?: 'magento2', 'user' => $s('search_user'), 'password' => (string)($in['search_password'] ?? '')];
         if (!preg_match('/^[\w.\-]+$/', $search['host']) || $search['port'] < 1 || $search['port'] > 65535) {
             $err[] = 'Host o porta del motore di ricerca non validi.';
@@ -182,12 +189,24 @@ function validate_install(array $in): array
                 $err[] = $m['label'] . ' richiede OpenSearch: con la ricerca MySQL non è installabile.';
                 continue;
             }
+            if (!empty($m['min_php']) && ($cli = php_cli_info()) && version_compare($cli['version'], $m['min_php'], '<')) {
+                $err[] = $m['label'] . ' richiede PHP ' . $m['min_php'] . ' o successivo: il PHP da riga di comando è ' . $cli['version'] . '.';
+                continue;
+            }
+            if (!empty($m['needs_2fa']) && !empty($in['disable_2fa'])) {
+                $err[] = $m['label'] . ' dipende dall\'autenticazione a due fattori: non si può disattivare il 2FA con questo modulo.';
+                continue;
+            }
             // Già incluso dalla distro (es. RMA in quella italiana): non lo duplichiamo.
             if (!preg_grep('#^' . preg_quote($m['name'], '#') . ':#', $packages)) {
                 $packages[] = $m['name'] . ':' . $m['constraint'];
             }
         }
     }
+
+    // I moduli Mage-OS che il prodotto richiede già a versione fissa non si riaggiungono: il vincolo del catalogo andrebbe in conflitto.
+    $included = (array)($version['included'] ?? []);
+    $packages = array_values(array_filter($packages, fn($spec) => !in_array(explode(':', $spec, 2)[0], $included, true)));
 
     // Tema e checkout: pacchetti, repository e replace vengono sempre dal catalogo.
     $frontendId = $s('frontend') ?: 'luma';
@@ -296,6 +315,24 @@ function running_job(): ?string
 
 function start_install(array $config): array
 {
+    if (!is_writable(APP_ROOT)) {
+        return ['error' => 'Il processo PHP non può scrivere nella cartella dell\'installer (' . APP_ROOT . '): serve per il blocco .installed e per la rimozione finale. Correggi i permessi.'];
+    }
+    // Il controllo "c'è un job in corso" e la creazione del nuovo devono essere un'unica operazione.
+    $lock = @fopen(app_tmp() . '/start.lock', 'c');
+    if (!$lock || !flock($lock, LOCK_EX)) {
+        return ['error' => 'Impossibile ottenere il blocco di avvio in ' . app_tmp() . '.'];
+    }
+    try {
+        return start_install_locked($config);
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+}
+
+function start_install_locked(array $config): array
+{
     if ($busy = running_job()) {
         return ['error' => 'Un\'installazione è già in corso: attendi che finisca o annullala.', 'job' => $busy, 'busy' => true];
     }
@@ -308,19 +345,31 @@ function start_install(array $config): array
     if (!@mkdir($dir, 0700, true)) {
         return ['error' => 'Impossibile creare la cartella del job in ' . $dir];
     }
+    $old = umask(0077);
     file_put_contents($dir . '/job.json', json_encode($config, JSON_UNESCAPED_SLASHES));
+    umask($old);
     chmod($dir . '/job.json', 0600);
     file_put_contents($dir . '/status.json', json_encode(['state' => 'queued', 'steps' => [], 'started' => time()]));
     file_put_contents($dir . '/log.txt', '');
 
-    $cmd = 'nohup ' . escapeshellarg($php) . ' -d memory_limit=-1 ' . escapeshellarg(APP_ROOT . '/worker.php') . ' ' . escapeshellarg($id)
-        . ' > ' . escapeshellarg($dir . '/worker.out') . ' 2>&1 &';
+    // setsid: il worker non muore se il servizio web si riavvia; i descrittori 3-9 chiusi: niente socket di ascolto ereditato (php -S).
+    $setsid = sh('command -v setsid');
+    $cmd = 'nohup ' . ($setsid !== '' ? escapeshellarg($setsid) . ' ' : '') . escapeshellarg($php) . ' -d memory_limit=-1 ' . escapeshellarg(APP_ROOT . '/worker.php') . ' ' . escapeshellarg($id)
+        . ' < /dev/null > ' . escapeshellarg($dir . '/worker.out') . ' 2>&1 3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&- &';
     $p = proc_open(['/bin/sh', '-c', $cmd], [], $pipes, null, shell_env());
     if (!is_resource($p)) {
         return ['error' => 'Impossibile avviare il processo di installazione.'];
     }
     proc_close($p);
     return ['job' => $id];
+}
+
+/** A job concluso (o morto) non servono più le credenziali in chiaro. */
+function scrub_job_dir(string $dir): void
+{
+    @unlink($dir . '/job.json');
+    @unlink($dir . '/install-args.json');
+    rrmdir($dir . '/composer-home');
 }
 
 function job_status(string $id, int $since): array
@@ -345,6 +394,7 @@ function job_status(string $id, int $since): array
         $age = time() - (int)@filemtime($dir . '/status.json');
         if ($stale || ($status['state'] === 'queued' && $age > 20)) {
             $out = trim((string)@file_get_contents($dir . '/worker.out'));
+            scrub_job_dir($dir);
             $status['state'] = 'failed';
             $status['error'] = 'Il processo di installazione si è interrotto inaspettatamente.' . ($out !== '' ? "\n" . substr($out, -800) : '');
         }

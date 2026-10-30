@@ -12,21 +12,17 @@
         "group": "Contenuti",
         "label": "FAQ",
         "description": "Domande frequenti con gestione in admin, widget e contenuto Page Builder. Installa anche il modulo SEO.",
-        "incompatible_with": [
-            "light"
-        ],
-        "min_magento": "2.4.7"
+        "min_magento": "2.4.7",
+        "min_php": "8.3"
     },
     {
         "name": "mage-os/module-seo",
-        "constraint": "^2.1",
+        "constraint": "^2.2",
         "group": "SEO e marketing",
         "label": "SEO",
-        "description": "Dati strutturati JSON-LD, meta tag e gestione dei canonical. Richiede MSI: non disponibile con la distro Light.",
-        "incompatible_with": [
-            "light"
-        ],
-        "min_magento": "2.4.7"
+        "description": "Dati strutturati JSON-LD, meta tag e gestione dei canonical. Dalla 2.2 MSI è facoltativo, quindi va anche con la distro Light.",
+        "min_magento": "2.4.7",
+        "min_php": "8.3"
     },
     {
         "name": "mage-os/module-hreflang",
@@ -69,14 +65,15 @@
         "constraint": "^2.5",
         "group": "Vendite e clienti",
         "label": "Resi (RMA)",
-        "description": "Richieste di reso gestite da storefront e admin. Obbligatorio per i negozi italiani."
+        "description": "Richieste di reso gestite da storefront e admin. Utile per il diritto di recesso dei negozi italiani."
     },
     {
         "name": "mage-os/module-passkey-auth",
         "constraint": "^1.0",
         "group": "Vendite e clienti",
         "label": "Passkey",
-        "description": "Accesso dei clienti con passkey (WebAuthn)."
+        "description": "Accesso dei clienti con passkey (WebAuthn). Dipende dall'autenticazione a due fattori: non si può disattivare il 2FA.",
+        "needs_2fa": true
     },
     {
         "name": "mage-os/module-maxmind-geoip-redirect",
@@ -94,7 +91,7 @@
     },
     {
         "name": "mage-os/module-extension-directory",
-        "constraint": "^0.2",
+        "constraint": "^1.1",
         "group": "Amministrazione",
         "label": "Extension Directory",
         "description": "Sfoglia le estensioni della directory Mage-OS dall'admin."
