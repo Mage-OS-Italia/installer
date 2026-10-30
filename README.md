@@ -19,7 +19,7 @@ Sono file JSON in `distros/`. Un repository può essere `composer` (default, con
 |---|---|
 | `light` | La piattaforma scelta senza i pacchetti non necessari (MSI, GraphQL superflui, DHL, FedEx, New Relic, analytics…; con Magento anche Adobe IMS, Stock e Braintree) tramite `replace` (129 su Magento, 116 su Mage-OS: elenchi `replace` e `replace_mageos`) |
 | `normal` | La piattaforma scelta, base e senza extra |
-| `italiana` | Come `normal` + lingua it_IT (pacchetto `mage-os-italia/module-language-it_it`, repository pubblico su GitHub, nessuna credenziale), EUR, Europe/Rome, modulo Resi (RMA) di Mage-OS, IVA italiana preselezionata e moduli Threecommerce a scelta (le credenziali di `repo.threecommerce.it` servono solo se se ne seleziona qualcuno) |
+| `italiana` | Come `normal` + lingua it_IT (pacchetto `mage-os-italia/module-language-it_it` da Packagist, nessuna credenziale), EUR, Europe/Rome, modulo Resi (RMA) di Mage-OS, IVA italiana preselezionata e moduli Threecommerce a scelta (le credenziali di `repo.threecommerce.it` servono solo se se ne seleziona qualcuno) |
 
 ## Moduli Mage-OS e IVA italiana
 - `catalog/mageos.json` elenca i moduli Mage-OS selezionabili con qualsiasi distro (da Packagist). `incompatible_with` esclude un modulo da certe distro (es. SEO e FAQ richiedono MSI, quindi non vanno con `light`: SEO 2.2 lo rende facoltativo ma va in conflitto con `meta-robots-tag` fissato da Mage-OS 3.6); `min_magento` e `min_php` fanno comparire un avviso (e rifiutano l'avvio) se la versione di Magento o il PHP CLI sono troppo vecchi; `needs_2fa` impedisce di disattivare il 2FA. I moduli che il prodotto Mage-OS richiede già a versione fissa non vengono riaggiunti (e compaiono come «già inclusi»).
