@@ -106,7 +106,9 @@
     return 0;
   };
   const tooOld = (m) => S.f.platform === 'magento' && !!m.min_magento && vcmp(S.f.version, m.min_magento) < 0;
-  const isIncompatible = (m) => (m.incompatible_with || []).includes(S.f.distro) || (!!m.needs_opensearch && useMysql());
+  /** MSI (multi-magazzino) resta solo se richiesto; la distro Light lo esclude sempre. */
+  const noMsi = () => distro()?.msi === false || !S.f.multi_stock;
+  const isIncompatible = (m) => (m.incompatible_with || []).includes(S.f.distro) || (!!m.needs_opensearch && useMysql()) || (!!m.needs_msi && noMsi());
   /** Moduli che il prodotto (Mage-OS) richiede già a versione fissa: non si aggiungono. */
   const inProduct = (m) => (version()?.included || []).includes(m.name);
   const selectedMageos = () => S.boot.mageos.filter((m) => S.f.mageos.includes(m.name) && !isIncompatible(m) && !distroPackageNames().includes(m.name) && !inProduct(m));
@@ -146,7 +148,7 @@
     const latest = b.platforms.magento.versions[0];
     const parent = (b.server.parent_dir || '').replace(/\/+$/, '');
     S.f = {
-      platform: 'magento', version: latest.version, distro: (b.distros.find((d) => d.default) || b.distros[0])?.id || 'normal', frontend: 'luma', checkout: 'loki', hyva_keys: '', products: 1000, use_opensearch: false, packages: [], mageos: [], sample_data: false, italian_tax: false,
+      platform: 'magento', version: latest.version, distro: (b.distros.find((d) => d.default) || b.distros[0])?.id || 'normal', frontend: 'luma', checkout: 'loki', hyva_keys: '', products: 1000, use_opensearch: false, packages: [], mageos: [], sample_data: false, italian_tax: false, multi_stock: false,
       target: parent + '/magento-store', base_url: '', store_name: 'Magento Store', backend_frontname: 'admin',
       language: 'it_IT', currency: 'EUR', timezone: 'Europe/Rome',
       db_host: 'localhost', db_name: '', db_user: 'root', db_password: '', db_prefix: '', create_db: true, cleanup_db: false,
@@ -273,18 +275,23 @@
       <h3>Opzioni</h3>
       <div class="checks">
         ${checkbox('sample_data', 'Installa i dati di esempio', 'Catalogo demo (prodotti, categorie, CMS, regole). Utile per provare il negozio; aggiunge circa 20 pacchetti e alcune centinaia di MB.')}
-        <div id="sample-note">${sampleNote()}</div>
+        <div id="msi-box">${msiBox()}</div>
         ${checkbox('italian_tax', 'Imposta le regole IVA italiane', 'Prezzi IVA inclusa, aliquota ordinaria 22% e classi per le aliquote ridotte 10% e 4%, Italia come paese predefinito. Il calcolo segue l\'indirizzo di spedizione: per vendere ad altri paesi UE aggiungi le rispettive aliquote.')}
       </div>
+      <div id="sample-note">${sampleNote()}</div>
 
       <h3>Dove installare</h3>
       ${field('Cartella di destinazione', 'target', { full: true, ph: '/var/www/mio-negozio', hint: 'Percorso assoluto sul server. Deve essere vuota o non esistere: verrà creata. La document root del sito dovrà puntare a <code>pub/</code>.' })}
       ${actions(false, true)}`;
   }
 
+  /** Domanda sul multi-magazzino: con la distro Light MSI è già escluso, quindi non si chiede. */
+  const msiBox = () => distro()?.msi === false ? ''
+    : checkbox('multi_stock', 'Uso più magazzini (MSI)', 'Inventario multi-sorgente: più magazzini, sorgenti e stock. Se il negozio ha un solo magazzino lascia la casella vuota: i moduli MSI (circa 75) non vengono scaricati e resta lo stock classico, più leggero. I moduli SEO e FAQ di Mage-OS richiedono MSI.');
+
   /** Con Hyvä i dati di esempio richiedono Luma: non lo escludiamo. */
   const sampleNote = () => S.f.frontend === 'hyva' && S.f.sample_data
-    ? '<div class="notice" style="margin:0">Con Hyvä i dati di esempio richiedono Luma: Luma e Blank restano installati (il tema attivo sarà comunque Hyvä).</div>' : '';
+    ? '<div class="notice" style="margin:10px 0 0">Con Hyvä i dati di esempio richiedono Luma: Luma e Blank restano installati (il tema attivo sarà comunque Hyvä).</div>' : '';
 
   function searchModeBox() {
     const max = S.boot.mysql_search.max_products.toLocaleString('it-IT');
@@ -336,7 +343,7 @@
         ${S.boot.mageos.filter((m) => m.group === g).map((m) => {
           const included = own.includes(m.name) || inProduct(m);
           const off = isIncompatible(m);
-          return `<label class="check" ${off || included ? 'style="opacity:.6"' : ''}><input type="checkbox" data-mageos="${esc(m.name)}" ${included || S.f.mageos.includes(m.name) ? 'checked' : ''} ${off || included ? 'disabled' : ''}><span><b>${esc(m.label)}</b>${included ? ` <span class="chip">${own.includes(m.name) ? 'incluso nella distro' : 'già incluso in ' + esc(pname()) + ' ' + esc(S.f.version)}</span>` : ''}${off ? ` <span class="chip">${m.needs_opensearch && useMysql() ? 'richiede OpenSearch' : 'non disponibile con questa distro'}</span>` : ''}${tooOld(m) ? ` <span class="chip">richiede Magento ${esc(m.min_magento)}+</span>` : ''}${tooOldPhp(m) ? ` <span class="chip">richiede PHP ${esc(m.min_php)}+</span>` : ''}<small>${esc(m.description)} · <code>${esc(m.name)}</code></small></span></label>`;
+          return `<label class="check" ${off || included ? 'style="opacity:.6"' : ''}><input type="checkbox" data-mageos="${esc(m.name)}" ${included || S.f.mageos.includes(m.name) ? 'checked' : ''} ${off || included ? 'disabled' : ''}><span><b>${esc(m.label)}</b>${included ? ` <span class="chip">${own.includes(m.name) ? 'incluso nella distro' : 'già incluso in ' + esc(pname()) + ' ' + esc(S.f.version)}</span>` : ''}${off ? ` <span class="chip">${m.needs_opensearch && useMysql() ? 'richiede OpenSearch' : m.needs_msi && noMsi() && !(m.incompatible_with || []).includes(S.f.distro) ? (distro()?.msi === false ? 'richiede MSI: non disponibile con questa distro' : 'richiede MSI: attiva il multi-magazzino') : 'non disponibile con questa distro'}</span>` : ''}${tooOld(m) ? ` <span class="chip">richiede Magento ${esc(m.min_magento)}+</span>` : ''}${tooOldPhp(m) ? ` <span class="chip">richiede PHP ${esc(m.min_php)}+</span>` : ''}<small>${esc(m.description)} · <code>${esc(m.name)}</code></small></span></label>`;
         }).join('')}
       </div></div>`).join('')}`)}`;
   }
@@ -532,7 +539,7 @@
       <h2>Riepilogo</h2>
       <p class="lead">Controlla i dati: quando premi <b>Installa</b> parte il download e la configurazione. Puoi lasciare la pagina aperta e seguire il log in diretta.</p>
       <div class="recap">
-        <section><h4>${esc(pname())}</h4><dl>${row('Versione', esc(v.version))}${row('Distro', esc(d.name))}${row('Tema', esc(frontend().name))}${row('Checkout', esc(frontend().checkouts.find((c) => c.id === f.checkout)?.label || ''))}${row('Moduli extra', pk.length)}${row('Dati di esempio', f.sample_data ? 'sì' : 'no')}${row('IVA italiana', f.italian_tax ? 'sì' : 'no')}${row('Modalità', esc(f.deploy_mode))}</dl></section>
+        <section><h4>${esc(pname())}</h4><dl>${row('Versione', esc(v.version))}${row('Distro', esc(d.name))}${row('Tema', esc(frontend().name))}${row('Checkout', esc(frontend().checkouts.find((c) => c.id === f.checkout)?.label || ''))}${row('Moduli extra', pk.length)}${row('Dati di esempio', f.sample_data ? 'sì' : 'no')}${row('IVA italiana', f.italian_tax ? 'sì' : 'no')}${row('Multi-magazzino (MSI)', noMsi() ? 'no' : 'sì')}${row('Modalità', esc(f.deploy_mode))}</dl></section>
         <section><h4>Destinazione</h4><dl>${row('Cartella', esc(f.target))}${row('Base URL', esc(f.base_url))}${row('Admin', esc('/' + f.backend_frontname))}</dl></section>
         <section><h4>Database</h4><dl>${row('Server', esc((S.db?.server || '') + ' ' + (S.db?.version || '')))}${row('Host', esc(f.db_host))}${row('Database', esc(f.db_name))}${row('Utente', esc(f.db_user))}${row('Svuota', f.cleanup_db ? 'sì' : 'no')}</dl></section>
         <section><h4>Ricerca</h4><dl>${useMysql() ? row('Motore', 'MySQL (Swissup)') + row('Prodotti previsti', esc(f.products)) : row('Motore', esc(f.search_engine)) + row('Host', esc(f.search_host + ':' + f.search_port)) + row('Prefisso', esc(f.search_prefix))}</dl></section>
@@ -759,6 +766,10 @@
         if (k.startsWith('search_') && k !== 'search_engine') { S.search = null; const b = $('#search-test'); if (b) b.hidden = true; }
         if (k === 'cleanup_db' || k === 'allow_unsupported_db') updateNext();
         if (['db_host', 'db_name', 'db_user', 'db_password'].includes(k) || k.startsWith('search_')) updateNext();
+        if (k === 'multi_stock') {
+          S.f.mageos = S.f.mageos.filter((n) => !isIncompatible(S.boot.mageos.find((m) => m.name === n) || {}));
+          renderStep(); return; // i moduli che richiedono MSI cambiano stato
+        }
         if (k === 'sample_data') { S.req = null; const n = $('#sample-note'); if (n) n.innerHTML = sampleNote(); }
         if (k === 'products' || k === 'use_opensearch') {
           const m = $('#search-mode');
