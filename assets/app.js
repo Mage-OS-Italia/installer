@@ -244,7 +244,7 @@
     const v = version();
     const d = distro();
     const pl = platform();
-    const opts = pl.versions.map((x, i) => [x.version, x.version + (i === 0 ? ' — ultima' : '') + (isEol(x) ? ' — fine supporto' : '')]);
+    const opts = pl.versions.map((x, i) => [x.version, x.version + (i === 0 ? ' — ultima' : '') + (x.eol ? (isEol(x) ? ' — fine supporto ' : ' — supporto fino al ') + x.eol : '')]);
     const optional = (d?.packages || []).filter((p) => !p.required);
     const required = (d?.packages || []).filter((p) => p.required);
     return `
