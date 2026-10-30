@@ -12,15 +12,21 @@
         "group": "Contenuti",
         "label": "FAQ",
         "description": "Domande frequenti con gestione in admin, widget e contenuto Page Builder. Installa anche il modulo SEO.",
+        "incompatible_with": [
+            "light"
+        ],
         "min_magento": "2.4.7",
         "min_php": "8.3"
     },
     {
         "name": "mage-os/module-seo",
-        "constraint": "^2.2",
+        "constraint": "^2.1",
         "group": "SEO e marketing",
         "label": "SEO",
-        "description": "Dati strutturati JSON-LD, meta tag e gestione dei canonical. Dalla 2.2 MSI è facoltativo, quindi va anche con la distro Light.",
+        "description": "Dati strutturati JSON-LD, meta tag e gestione dei canonical. Richiede MSI: non disponibile con la distro Light.",
+        "incompatible_with": [
+            "light"
+        ],
         "min_magento": "2.4.7",
         "min_php": "8.3"
     },
