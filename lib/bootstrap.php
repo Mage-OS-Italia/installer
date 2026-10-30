@@ -137,7 +137,8 @@ function shell_env(array $extra = []): array
     ))));
     // L'ambiente è ricostruito da zero: si tengono solo proxy e certificati, senza i quali composer non esce in rete.
     $keep = [];
-    foreach (['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy', 'no_proxy', 'SSL_CERT_FILE', 'SSL_CERT_DIR', 'CURL_CA_BUNDLE', 'COMPOSER_AUTH'] as $k) {
+    // HTTP_PROXY maiuscolo è escluso apposta: sotto CGI/FPM un header `Proxy:` del client diventa quella variabile (httpoxy).
+    foreach (['HTTPS_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy', 'no_proxy', 'SSL_CERT_FILE', 'SSL_CERT_DIR', 'CURL_CA_BUNDLE', 'COMPOSER_AUTH'] as $k) {
         $v = getenv($k);
         if ($v !== false && $v !== '') {
             $keep[$k] = $v;
@@ -327,9 +328,18 @@ function remove_installer(): array
         return ['ok' => false, 'error' => 'Percorso non sicuro.', 'failed' => [], 'left' => []];
     }
     $failed = [];
-    foreach (INSTALLER_FILES as $f) {
+    // Prima i file di contorno; codice (lib, worker, index) solo se è andato tutto bene, così un'installer rimasto a metà resta almeno in grado di mostrare il blocco.
+    $code = ['lib', 'worker.php', 'index.php'];
+    foreach (array_diff(INSTALLER_FILES, $code) as $f) {
         if (!rrmdir("$root/$f")) {
             $failed[] = $f;
+        }
+    }
+    if (!$failed) {
+        foreach ($code as $f) {
+            if (!rrmdir("$root/$f")) {
+                $failed[] = $f;
+            }
         }
     }
     if ($failed) {

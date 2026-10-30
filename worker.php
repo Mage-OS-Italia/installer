@@ -51,7 +51,10 @@ final class Worker
     public function __construct(string $id)
     {
         $this->dir = job_dir($id);
-        $this->cfg = json_decode((string)file_get_contents($this->dir . '/job.json'), true);
+        $this->cfg = json_decode((string)@file_get_contents($this->dir . '/job.json'), true);
+        if (!is_array($this->cfg)) {
+            throw new RuntimeException('job.json assente o non leggibile.');
+        }
         // Da qui le credenziali vivono solo in memoria: un worker ucciso (OOM, riavvio) non lascia il file in chiaro.
         @unlink($this->dir . '/job.json');
         $this->php = find_php_cli() ?? PHP_BINARY;
@@ -347,6 +350,9 @@ final class Worker
         $name = ($this->dbIsMaria ? 'MariaDB ' : 'MySQL ') . $this->dbVersion;
         if ($patterns === null) {
             $this->log("⚠ di.xml senza supportedVersionPatterns: non posso verificare che $name sia ammesso.");
+            // Se il controllo preliminare l'aveva rifiutato e l'utente ha scelto "Procedi comunque", l'override si applica lo stesso.
+            $this->needsDbOverride = $this->cfg['allow_unsupported_db']
+                && !db_is_supported($this->dbIsMaria, $this->dbVersion, $this->cfg['platform'], $this->cfg['version']);
             return;
         }
         if (db_version_in_patterns($patterns, $this->dbIsMaria, $this->dbVersion)) {
@@ -835,9 +841,34 @@ final class Worker
         if ($pid <= 1) {
             return;
         }
-        foreach (preg_split('/\s+/', sh('pgrep -P ' . $pid), -1, PREG_SPLIT_NO_EMPTY) ?: [] as $child) {
-            $this->killTree((int)$child, $signal);
+        $all = $this->descendants($pid);
+        if ($signal === 9) {
+            // Prima si congela l'albero (SIGSTOP), così nessuno può generare altri figli mentre li si elenca e li si uccide.
+            $stop = defined('SIGSTOP') ? SIGSTOP : (PHP_OS_FAMILY === 'Darwin' ? 17 : 19);
+            for ($i = 0; $i < 3; $i++) {
+                foreach ($all as $p) {
+                    $this->signal($p, $stop);
+                }
+                $all = array_values(array_unique(array_merge($all, $this->descendants($pid))));
+            }
         }
+        foreach (array_reverse($all) as $p) {
+            $this->signal($p, $signal);
+        }
+    }
+
+    /** Il processo e tutti i suoi discendenti, padre per primo. */
+    private function descendants(int $pid): array
+    {
+        $out = [$pid];
+        foreach (preg_split('/\s+/', sh('pgrep -P ' . $pid), -1, PREG_SPLIT_NO_EMPTY) ?: [] as $child) {
+            $out = array_merge($out, $this->descendants((int)$child));
+        }
+        return $out;
+    }
+
+    private function signal(int $pid, int $signal): void
+    {
         function_exists('posix_kill') ? @posix_kill($pid, $signal) : sh('kill -' . $signal . ' ' . $pid);
     }
 

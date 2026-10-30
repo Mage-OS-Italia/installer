@@ -392,7 +392,7 @@ function job_status(string $id, int $since): array
         $pid = (int)($status['pid'] ?? 0);
         $stale = $pid > 0 && function_exists('posix_kill') && !@posix_kill($pid, 0);
         $age = time() - (int)@filemtime($dir . '/status.json');
-        if ($stale || ($status['state'] === 'queued' && $age > 20)) {
+        if ($stale || ($status['state'] === 'queued' && $age > 60)) {
             $out = trim((string)@file_get_contents($dir . '/worker.out'));
             scrub_job_dir($dir);
             $status['state'] = 'failed';

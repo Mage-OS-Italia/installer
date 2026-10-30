@@ -65,12 +65,21 @@ function token_file(): string
 function access_token(): string
 {
     $f = token_file();
-    if (!is_file($f)) {
+    $token = is_file($f) ? trim((string)@file_get_contents($f)) : '';
+    if ($token === '') {
+        // Scrittura su un file temporaneo e rename: chi legge non vede mai un token a metà, e un file vuoto o troncato si rigenera.
+        $token = bin2hex(random_bytes(12));
+        $tmp = $f . '.' . bin2hex(random_bytes(4));
         $old = umask(0077);
-        @file_put_contents($f, bin2hex(random_bytes(12)), LOCK_EX);
+        $ok = @file_put_contents($tmp, $token) === strlen($token) && @rename($tmp, $f);
         umask($old);
+        if (!$ok) {
+            @unlink($tmp);
+            return '';
+        }
+        $token = trim((string)@file_get_contents($f));
     }
-    return trim((string)@file_get_contents($f));
+    return $token;
 }
 
 $authorized = !empty($_SESSION['authorized']) || is_trusted_client();
@@ -165,6 +174,9 @@ if ($action !== '') {
         case 'remove':
             if (!$post) {
                 json_out(['error' => 'Operazione non consentita.'], 400);
+            }
+            if (running_job() !== null) {
+                json_out(['ok' => false, 'error' => 'Un\'installazione è in corso: attendi che finisca o annullala prima di rimuovere l\'installer.', 'failed' => [], 'left' => []], 409);
             }
             $r = remove_installer();
             json_out($r, $r['ok'] ? 200 : 500);

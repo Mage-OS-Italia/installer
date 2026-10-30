@@ -29,7 +29,7 @@ function platform_versions(string $platform, bool $refresh = false): array
 {
     $p = PLATFORMS[$platform];
     $pkg = $p['vendor'] . '/product-community-edition';
-    $cache = app_tmp('cache') . "/versions-$platform-v2.json";
+    $cache = app_tmp('cache') . "/versions-$platform-v3.json";
     if (!$refresh && is_file($cache) && filemtime($cache) > time() - 3600) {
         $data = json_decode((string)file_get_contents($cache), true);
         if (is_array($data) && $data) {
@@ -73,7 +73,8 @@ function platform_versions(string $platform, bool $refresh = false): array
             }
             // `conflict` senza una versione fissata nei require (es. paypal/module-braintree >=4.7.0 su 2.4.7-p6…p9):
             // per escludere il pacchetto con "replace" basta limitarlo alle versioni che non confliggono.
-            foreach ((array)($prev['conflict'] ?? []) as $name => $constraint) {
+            // Solo fino a 2.4.7: da 2.4.8 il metapacchetto del prodotto richiede Braintree ^4.8 e un replace "<4.7.0" non lo soddisfa.
+            foreach (version_compare((string)preg_replace('/-p\d+$/', '', $v), '2.4.8', '<') ? (array)($prev['conflict'] ?? []) : [] as $name => $constraint) {
                 if (!isset($pins[$name]) && !isset($req[$name]) && preg_match('/^>=\s*(\d[\w.\-]*)$/', trim((string)$constraint), $cm)) {
                     $pins[$name] = '<' . $cm[1];
                 }

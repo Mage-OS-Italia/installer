@@ -330,17 +330,26 @@ function test_search(array $p): array
     }
     $scheme = 'http';
     $r = http_get("http://$host:$port/", 5, $headers);
+    $verified = true;
     if (!$r['ok']) {
-        // Un certificato autogenerato è la norma su OpenSearch con la sicurezza di default: qui si verifica solo che risponda.
-        $r = http_get("https://$host:$port/", 5, $headers, false, false);
         $scheme = 'https';
+        $r = http_get("https://$host:$port/", 5, $headers);
+        if (!$r['ok']) {
+            // Certificato autogenerato: è la norma su OpenSearch con la sicurezza di default. Le credenziali però si inviano
+            // senza verifica solo a un host locale; altrove si controlla solo che risponda, senza password.
+            $local = $host === 'localhost' || preg_match('/^127(\.\d{1,3}){3}$/', $host) === 1;
+            $r = http_get("https://$host:$port/", 5, $local ? $headers : [], false, false);
+            $verified = false;
+        }
     }
     if (!$r['ok']) {
         return ['status' => 'fail', 'message' => "Nessuna risposta da $host:$port" . ($r['error'] ? ' (' . $r['error'] . ')' : '') . '.'];
     }
     $j = json_decode($r['body'], true);
     if ($r['code'] === 401) {
-        return ['status' => 'fail', 'message' => 'Autenticazione richiesta: inserisci utente e password.'];
+        return ['status' => 'fail', 'message' => $verified || !$headers
+            ? 'Autenticazione richiesta: inserisci utente e password.'
+            : 'Il servizio richiede l\'autenticazione ma il suo certificato HTTPS non è verificabile: le credenziali non sono state inviate. Installa un certificato valido o usa un host locale.'];
     }
     $num = $j['version']['number'] ?? null;
     if (!$num) {
@@ -358,5 +367,5 @@ function test_search(array $p): array
     if ($engine === 'elasticsearch7' && !empty($p['version']) && !es7_supported((string)($p['platform'] ?? 'magento'), (string)$p['version'])) {
         return ['status' => 'fail', 'message' => "$label non è supportato da questa versione: il modulo Elasticsearch 7 è stato tolto. Usa OpenSearch o Elasticsearch 8."] + $extra;
     }
-    return ['status' => 'ok', 'version' => $num, 'message' => "$label raggiungibile" . ($scheme === 'https' ? ' (HTTPS).' : '.')] + $extra;
+    return ['status' => 'ok', 'version' => $num, 'message' => "$label raggiungibile" . ($scheme === 'https' ? ($verified ? ' (HTTPS).' : ' (HTTPS, certificato non verificato).') : '.')] + $extra;
 }
