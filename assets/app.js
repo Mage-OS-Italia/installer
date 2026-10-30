@@ -93,7 +93,7 @@
   function neededRepos() {
     const d = distro();
     const ids = new Set(selectedPackages().map((p) => p.repository).filter(Boolean));
-    return (d?.repositories || []).filter((r) => ids.has(r.id));
+    return (d?.repositories || []).filter((r) => ids.has(r.id) && !r.public);
   }
 
   /** Moduli Mage-OS scelti dall'elenco (esclusi quelli già inclusi dalla distro). */

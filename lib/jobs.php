@@ -256,7 +256,7 @@ function validate_install(array $in): array
 
     $credentials = $feCreds;
     foreach ($repos as $r) {
-        if (isset($feCreds[$r['host']])) {
+        if (isset($feCreds[$r['host']]) || !empty($r['public'])) {
             continue;
         }
         $c = $in['credentials'][$r['host']] ?? [];

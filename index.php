@@ -144,7 +144,8 @@ if ($action !== '') {
                 foreach ($d['packages'] ?? [] as $p) {
                     if ((!empty($p['required']) || isset($needed[$p['name']])) && !empty($p['repository'])) {
                         foreach ($d['repositories'] as $r) {
-                            if ($r['id'] === $p['repository']) {
+                            // La verifica di rete vale per i repository Composer; i VCS pubblici (GitHub) non hanno packages.json.
+                            if ($r['id'] === $p['repository'] && ($r['type'] ?? 'composer') === 'composer') {
                                 $repos[$r['url']] = $r['url'];
                             }
                         }

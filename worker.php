@@ -265,7 +265,7 @@ final class Worker
             throw new StepFailure('composer.json del progetto non leggibile.');
         }
         foreach ($c['repositories'] as $r) {
-            $json['repositories'][$r['id']] = ['type' => 'composer', 'url' => $r['url']];
+            $json['repositories'][$r['id']] = ['type' => in_array($r['type'] ?? '', ['composer', 'vcs'], true) ? $r['type'] : 'composer', 'url' => $r['url']];
         }
         foreach ($c['replace'] as $name) {
             $json['replace'][$name] = $c['replace_pins'][$name] ?? '*';

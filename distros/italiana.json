@@ -18,6 +18,14 @@
     },
     "repositories": [
         {
+            "id": "mage-os-italia",
+            "name": "Mage-OS Italia (GitHub)",
+            "type": "vcs",
+            "url": "https://github.com/Mage-OS-Italia/module-language-it_it",
+            "host": "github.com",
+            "public": true
+        },
+        {
             "id": "threecommerce",
             "name": "Repository Threecommerce",
             "url": "https://repo.threecommerce.it/",
@@ -33,9 +41,9 @@
             "description": "Gestione dei resi, utile per il diritto di recesso dei negozi italiani. Da Mage-OS."
         },
         {
-            "name": "threecommerce/m2-language-it-it",
-            "constraint": "^1.1",
-            "repository": "threecommerce",
+            "name": "mage-os-italia/module-language-it_it",
+            "constraint": "*",
+            "repository": "mage-os-italia",
             "required": true,
             "label": "Pacchetto lingua italiano (it_IT)",
             "description": "Traduzioni di storefront e admin."
