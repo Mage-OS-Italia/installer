@@ -43,6 +43,8 @@ function validate_install(array $in): array
     if (!$distro) {
         $err[] = 'Distro non valida.';
     }
+    // Senza multi-magazzino MSI si esclude; la distro Light lo esclude sempre.
+    $noMsi = ($distro['msi'] ?? true) === false || empty($in['multi_stock']);
 
     $target = rtrim($s('target'), '/');
     if ($target === '' || $target[0] !== '/' || str_contains($target, '..') || preg_match('/[\0\n\r]/', $target)) {
@@ -185,6 +187,12 @@ function validate_install(array $in): array
                 $err[] = $m['label'] . ' non è compatibile con la distro ' . $distro['name'] . '.';
                 continue;
             }
+            if ($noMsi && !empty($m['needs_msi'])) {
+                $err[] = $m['label'] . (($distro['msi'] ?? true) === false
+                    ? ' richiede MSI: non è compatibile con la distro ' . $distro['name'] . '.'
+                    : ' richiede MSI: attiva «Uso più magazzini (MSI)» o deseleziona il modulo.');
+                continue;
+            }
             if ($useMysql && !empty($m['needs_opensearch'])) {
                 $err[] = $m['label'] . ' richiede OpenSearch: con la ricerca MySQL non è installabile.';
                 continue;
@@ -254,6 +262,10 @@ function validate_install(array $in): array
         }
     }
 
+    if ($noMsi && $platform) {
+        $replace = array_merge($replace, msi_packages($s('platform')));
+    }
+
     $credentials = $feCreds;
     foreach ($repos as $r) {
         if (isset($feCreds[$r['host']]) || !empty($r['public'])) {
@@ -287,6 +299,7 @@ function validate_install(array $in): array
         'deploy_mode' => $mode,
         'sample_data' => !empty($in['sample_data']),
         'italian_tax' => !empty($in['italian_tax']),
+        'multi_stock' => !$noMsi,
         'disable_2fa' => !empty($in['disable_2fa']),
         'install_cron' => !empty($in['install_cron']),
         'save_auth' => !empty($in['save_auth']),
@@ -295,7 +308,7 @@ function validate_install(array $in): array
         'credentials' => $credentials,
         'frontend' => ['id' => $frontendId, 'checkout' => $checkoutId, 'theme_path' => $fe['theme_path'] ?? ''],
         'distro_config' => (array)($distro['config'] ?? []),
-        'replace' => array_values(array_filter(array_merge($replace, (array)($distro[$s('platform') === 'mageos' ? 'replace_mageos' : 'replace'] ?? [])), fn($n) => is_string($n) && preg_match('#^[a-z0-9_.-]+/[a-z0-9_.-]+$#', $n))),
+        'replace' => array_values(array_unique(array_filter(array_merge($replace, (array)($distro[$s('platform') === 'mageos' ? 'replace_mageos' : 'replace'] ?? [])), fn($n) => is_string($n) && preg_match('#^[a-z0-9_.-]+/[a-z0-9_.-]+$#', $n)))),
     ];
     $config['replace_pins'] = $version ? array_intersect_key((array)($version['pins'] ?? []), array_flip($config['replace'])) : [];
     return [$config, $err];

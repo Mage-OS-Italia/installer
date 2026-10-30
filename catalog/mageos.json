@@ -12,9 +12,7 @@
         "group": "Contenuti",
         "label": "FAQ",
         "description": "Domande frequenti con gestione in admin, widget e contenuto Page Builder. Installa anche il modulo SEO.",
-        "incompatible_with": [
-            "light"
-        ],
+        "needs_msi": true,
         "min_magento": "2.4.7",
         "min_php": "8.3"
     },
@@ -23,10 +21,8 @@
         "constraint": "^2.1",
         "group": "SEO e marketing",
         "label": "SEO",
-        "description": "Dati strutturati JSON-LD, meta tag e gestione dei canonical. Richiede MSI: non disponibile con la distro Light.",
-        "incompatible_with": [
-            "light"
-        ],
+        "description": "Dati strutturati JSON-LD, meta tag e gestione dei canonical. Richiede MSI: si attiva con «Uso più magazzini (MSI)».",
+        "needs_msi": true,
         "min_magento": "2.4.7",
         "min_php": "8.3"
     },

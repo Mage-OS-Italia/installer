@@ -227,6 +227,14 @@ function mysql_search(): array
     return is_array($c) ? $c : ['max_products' => 0, 'engine' => '', 'packages' => [], 'replace' => []];
 }
 
+/** Pacchetti MSI (inventario multi-sorgente) da escludere con `replace` se il negozio non usa più magazzini (catalog/msi.json). */
+function msi_packages(string $platform): array
+{
+    $c = json_decode((string)@file_get_contents(APP_ROOT . '/catalog/msi.json'), true);
+    $list = is_array($c) ? ($c[$platform === 'mageos' ? 'replace_mageos' : 'replace'] ?? []) : [];
+    return array_values(array_filter((array)$list, 'is_string'));
+}
+
 /** Lingue, valute e fusi orari proposti dal form. */
 function locale_options(): array
 {
