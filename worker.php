@@ -207,7 +207,7 @@ final class Worker
             . ' --no-interaction --no-progress --no-ansi --prefer-dist --no-audit --no-install';
         $code = $this->run($cmd, $parent, $this->composerBase['env']);
         if ($code !== 0 || !is_file($c['target'] . '/composer.json')) {
-            throw new StepFailure("composer create-project è fallito (codice $code).");
+            throw new StepFailure("composer create-project è fallito (codice $code)." . $this->diskHint());
         }
         if ($c['save_auth'] && $c['credentials']) {
             $dest = $c['target'] . '/auth.json';
@@ -301,7 +301,7 @@ final class Worker
                     $why .= "\nControlla chiave e nome del progetto Hyvä (area licenze su hyva.io): sembra che il repository privato rifiuti l'accesso.";
                 }
             }
-            throw new StepFailure("composer update è fallito (codice $code)." . ($why !== '' ? $why : ' Controlla credenziali e disponibilità dei pacchetti.'));
+            throw new StepFailure("composer update è fallito (codice $code)." . $this->diskHint() . ($why !== '' ? $why : ' Controlla credenziali e disponibilità dei pacchetti.'));
         }
     }
 
@@ -372,7 +372,7 @@ final class Worker
             }
         });
         if ($code !== 0 || !is_file($c['target'] . '/app/etc/env.php')) {
-            throw new StepFailure("setup:install è fallito (codice $code). Controlla il log qui sopra.");
+            throw new StepFailure("setup:install è fallito (codice $code)." . $this->diskHint() . ' Controlla il log qui sopra.');
         }
     }
 
@@ -681,6 +681,19 @@ final class Worker
         if ($done % 5 === 0 || $done === $total) {
             $this->setStep($id, 'running', $total > 0 ? min(1, $done / $total) : null, $total > 0 ? "$done / $total $unit" : "$done $unit");
         }
+    }
+
+    /** Se il log recente parla di disco pieno lo dice chiaramente, invece del solo codice di uscita. */
+    private function diskHint(): string
+    {
+        $fh = @fopen($this->dir . '/log.txt', 'rb');
+        if (!$fh) {
+            return '';
+        }
+        fseek($fh, -min(20000, (int)@filesize($this->dir . '/log.txt')), SEEK_END);
+        $tail = (string)fread($fh, 20000);
+        fclose($fh);
+        return stripos($tail, 'No space left on device') !== false ? ' Spazio su disco esaurito: libera spazio nella cartella di destinazione e riprova.' : '';
     }
 
     private function log(string $line): void

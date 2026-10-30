@@ -213,7 +213,7 @@ function validate_install(array $in): array
             }
         }
         // I dati di esempio cercano il tema Magento/luma: con quelli Luma e Blank restano installati.
-        $replace = !empty($in['sample_data']) ? [] : ($fe['replace'] ?? []);
+        $replace = !empty($in['sample_data']) ? [] : array_map(fn($n) => str_replace('{vendor}', $platform['vendor'], (string)$n), $fe['replace'] ?? []);
         if (!empty($fe['repository'])) {
             $keys = parse_hyva_keys((string)($in['hyva_keys'] ?? ''));
             if (!$keys) {

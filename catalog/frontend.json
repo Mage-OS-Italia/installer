@@ -47,8 +47,8 @@
             "hyva-themes/magento2-default-theme": "*"
         },
         "replace": [
-            "magento/theme-frontend-luma",
-            "magento/theme-frontend-blank"
+            "{vendor}/theme-frontend-luma",
+            "{vendor}/theme-frontend-blank"
         ],
         "checkouts": [
             {
