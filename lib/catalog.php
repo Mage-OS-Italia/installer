@@ -15,6 +15,18 @@ const PLATFORMS = [
         'regex' => '/^\d+\.\d+\.\d+$/', 'fallback' => '3.6.0', 'fallback_php' => '~8.3.0||~8.4.0||~8.5.0'],
 ];
 
+/**
+ * Fine supporto Adobe per release Magento (le patch -pN seguono la release). Date da fonti pubbliche non sempre
+ * concordi: per 2.4.7 e 2.4.8 è il mese indicato da Adobe. Mage-OS non pubblica date, quindi nessuna voce.
+ */
+const MAGENTO_EOL = ['2.4.6' => '2026-08-11', '2.4.7' => '2027-04-09', '2.4.8' => '2028-04-09'];
+
+/** Data di fine supporto della versione o null se sconosciuta. */
+function eol_date(string $platform, string $version): ?string
+{
+    return $platform === 'magento' ? (MAGENTO_EOL[preg_replace('/-p\d+$/', '', $version)] ?? null) : null;
+}
+
 function platform_of(string $id): ?array
 {
     return PLATFORMS[$id] ?? null;

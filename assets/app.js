@@ -66,7 +66,10 @@
   }
 
   const platform = () => S.boot.platforms[S.f.platform];
+  const otherPlatform = () => Object.values(S.boot.platforms).find((x) => x.id !== S.f.platform);
   const pname = () => platform().name;
+  const isEol = (x) => !!x?.eol && x.eol <= new Date().toISOString().slice(0, 10);
+  const eolText = (x) => (isEol(x) ? 'fine supporto ' : 'supporto fino al ') + x.eol;
   const version = () => platform().versions.find((v) => v.version === S.f.version);
   const defaultName = () => (S.f.platform === 'mageos' ? 'mage-os' : 'magento') + '-store';
   const distro = () => S.boot.distros.find((d) => d.id === S.f.distro);
@@ -172,13 +175,16 @@
     render();
   }
 
+  /** Dal menu si torna ai passi già visitati; a installazione avviata il percorso è bloccato. */
+  const canGo = (i) => !S.job && i !== S.step && i <= (S.maxStep || 0) && i < 4;
+
   // ----------------------------------------------------------------- layout
   function render() {
     root.innerHTML = `
       <aside class="side">
-        <div class="brand"><img src="assets/logo.svg" alt=""><div><h1>Magento<br>Installer</h1><small>v${esc(S.boot.app.version)}</small></div></div>
+        <button type="button" class="brand" data-act="switch-platform" title="Passa a ${esc(otherPlatform().name)}"><img src="assets/logo.svg" alt=""><div><h1>${S.f.platform === 'mageos' ? 'Mage-OS' : 'Magento'}<br>Installer</h1><small>v${esc(S.boot.app.version)} · passa a ${esc(otherPlatform().name)} ⇄</small></div></button>
         <ol class="stepper card">${STEPS.map((t, i) => `
-          <li class="${i === S.step ? 'active' : i < S.step ? 'done' : ''}"><span class="num">${i < S.step ? '✓' : i + 1}</span><span>${esc(t)}</span></li>`).join('')}
+          <li class="${i === S.step ? 'active' : i < S.step ? 'done' : ''} ${canGo(i) ? 'nav' : ''}" ${canGo(i) ? `data-act="goto" data-step="${i}" role="button" tabindex="0"` : ''}><span class="num">${i < S.step ? '✓' : i + 1}</span><span>${esc(t)}</span></li>`).join('')}
         </ol>
         <div class="info card" id="side-info"></div>
       </aside>
@@ -198,7 +204,7 @@
         : `<p>La piattaforma ecommerce open source di Adobe. L'installer scarica i pacchetti ufficiali dal mirror pubblico <code>mirror.mage-os.org</code>: non servono chiavi Marketplace. I moduli opzionali arrivano da <a href="https://mage-os.org" target="_blank" rel="noopener">Mage-OS</a>.</p>
       <div class="links"><a href="https://developer.adobe.com/commerce/docs/" target="_blank" rel="noopener">Documentazione</a><a href="https://github.com/magento/magento2" target="_blank" rel="noopener">GitHub</a></div>`}
       <h3 style="margin-top:16px">Release selezionata</h3>
-      <dl><dt>Versione</dt><dd>${esc(v?.version)}</dd><dt>PHP</dt><dd>${esc(phpHuman(v?.php))}</dd>${v?.time ? `<dt>Rilascio</dt><dd>${esc(v.time)}</dd>` : ''}</dl>
+      <dl><dt>Versione</dt><dd>${esc(v?.version)}</dd><dt>PHP</dt><dd>${esc(phpHuman(v?.php))}</dd>${v?.time ? `<dt>Rilascio</dt><dd>${esc(v.time)}</dd>` : ''}${v?.eol ? `<dt>Supporto</dt><dd>${isEol(v) ? 'terminato il ' : 'fino al '}${esc(v.eol)}</dd>` : ''}</dl>
       <h3>Questo server</h3>
       <dl><dt>PHP web</dt><dd>${esc(s.php_web)} (${esc(s.sapi)})</dd><dt>PHP CLI</dt><dd>${esc(s.php_cli || 'non trovato')}</dd><dt>Sistema</dt><dd>${esc(s.os)}</dd><dt>Utente</dt><dd>${esc(s.user)}</dd></dl>`;
   }
@@ -238,7 +244,7 @@
     const v = version();
     const d = distro();
     const pl = platform();
-    const opts = pl.versions.map((x, i) => [x.version, x.version + (i === 0 ? ' — ultima' : '')]);
+    const opts = pl.versions.map((x, i) => [x.version, x.version + (i === 0 ? ' — ultima' : '') + (isEol(x) ? ' — fine supporto' : '')]);
     const optional = (d?.packages || []).filter((p) => !p.required);
     const required = (d?.packages || []).filter((p) => p.required);
     return `
@@ -248,7 +254,7 @@
       <div class="grid">
         ${select('Cosa vuoi installare', 'platform', Object.values(S.boot.platforms).map((x) => [x.id, x.name]), { hint: S.f.platform === 'mageos' ? 'Distribuzione community di Magento, con aggiornamenti della community.' : 'Il Magento Open Source ufficiale.' })}
         ${select('Versione di ' + esc(pname()), 'version', opts)}
-        <div class="field"><span>Requisiti di questa versione</span><div class="chips" style="margin-top:4px"><span class="chip accent">PHP ${esc(phpHuman(v.php))}</span>${v.time ? `<span class="chip">rilasciata ${esc(v.time)}</span>` : ''}</div></div>
+        <div class="field"><span>Requisiti di questa versione</span><div class="chips" style="margin-top:4px"><span class="chip accent">PHP ${esc(phpHuman(v.php))}</span>${v.time ? `<span class="chip">rilasciata ${esc(v.time)}</span>` : ''}${v.eol ? `<span class="chip ${isEol(v) ? 'fail' : ''}">${esc(eolText(v))}</span>` : ''}</div>${isEol(v) ? '<small>Versione non più supportata: niente patch di sicurezza, meglio una più recente.</small>' : ''}</div>
       </div>
 
       <h3>Distro</h3>
@@ -745,6 +751,14 @@
     });
   }
 
+  function onPlatformChanged() {
+    S.f.version = platform().versions[0].version;
+    if (!S.touched.target) S.f.target = S.f.target.replace(/[^/]*$/, defaultName());
+    if (!S.touched.store_name) S.f.store_name = pname() + ' Store';
+    S.touched.platform = false;
+    S.req = null; S.db = null; S.search = null; syncDerived(); render();
+  }
+
   function bind(scope) {
     addPwEyes(scope);
     $$('[data-k]', scope).forEach((el) => {
@@ -755,13 +769,7 @@
         S.touched[k] = true;
         if (k === 'target') { S.req = null; syncDerived(); }
         if (k === 'version') { S.req = null; S.db = null; S.search = null; renderSide(); renderStep(); return; }
-        if (k === 'platform') {
-          S.f.version = platform().versions[0].version;
-          if (!S.touched.target) S.f.target = S.f.target.replace(/[^/]*$/, defaultName());
-          if (!S.touched.store_name) S.f.store_name = pname() + ' Store';
-          S.touched.platform = false;
-          S.req = null; S.db = null; S.search = null; syncDerived(); renderSide(); renderStep(); return;
-        }
+        if (k === 'platform') { onPlatformChanged(); return; }
         if (['db_host', 'db_name', 'db_user', 'db_password'].includes(k)) { S.db = null; const b = $('#db-test'); if (b) b.hidden = true; const ub = $('#unsupported-box'); if (ub) ub.innerHTML = ''; }
         if (k.startsWith('search_') && k !== 'search_engine') { S.search = null; const b = $('#search-test'); if (b) b.hidden = true; }
         if (k === 'cleanup_db' || k === 'allow_unsupported_db') updateNext();
@@ -828,6 +836,7 @@
         if (S.errors.length) { renderStep(); return; }
       }
       S.step = Math.min(4, S.step + 1);
+      S.maxStep = Math.max(S.maxStep || 0, S.step);
       render();
       return;
     }
@@ -840,6 +849,10 @@
       case 'toggle-eye': setPwVisible(act.parentElement.querySelector('input'), act.parentElement.querySelector('input').type === 'password'); break;
       case 'start': startInstall(act); break;
       case 'cancel': if (confirm("Annullare l'installazione in corso?")) { act.disabled = true; await api('cancel', { job: S.job.id }); } break;
+      case 'goto': if (canGo(+act.dataset.step)) { S.step = +act.dataset.step; render(); } break;
+      case 'switch-platform':
+        if (S.job) break; // installazione in corso o conclusa: la piattaforma non si cambia
+        S.f.platform = otherPlatform().id; S.step = 0; S.maxStep = 0; onPlatformChanged(); break;
       case 'retry': S.job = null; saveJob(null); S.step = 3; render(); break;
       case 'copy-log': copy($('#job-log').innerText); act.textContent = 'Copiato ✓'; break;
       case 'reveal-pw': { const s = $('#pw-show'); const hidden = s.textContent.startsWith('•'); s.textContent = hidden ? S.f.admin_password : '••••••••••••'; act.textContent = hidden ? 'Nascondi' : 'Mostra'; break; }

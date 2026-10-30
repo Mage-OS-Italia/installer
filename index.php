@@ -121,7 +121,7 @@ if ($action !== '') {
             $platforms = [];
             foreach (PLATFORMS as $id => $pl) {
                 $v = platform_versions($id);
-                $platforms[$id] = ['id' => $id, 'name' => $pl['name'], 'versions' => $v['versions'], 'source' => $v['source']];
+                $platforms[$id] = ['id' => $id, 'name' => $pl['name'], 'versions' => array_map(fn($x) => $x + ['eol' => eol_date($id, $x['version'])], $v['versions']), 'source' => $v['source']];
             }
             json_out([
                 'platforms' => $platforms,
