@@ -712,26 +712,28 @@ final class Worker
             return;
         }
         $t = rtrim((string)$this->cfg['target'], '/');
-        if ($t === '' || $t === '/' || $t === home_dir() || !is_dir($t)) {
-            return;
+        $msg = 'Pulizia:';
+        if ($t !== '' && $t !== '/' && $t !== home_dir() && is_dir($t)) {
+            foreach (array_diff(scandir($t) ?: [], ['.', '..']) as $f) {
+                rrmdir($t . '/' . $f);
+            }
+            if ($this->targetCreated) {
+                @rmdir($t);
+            }
+            $msg .= ' rimossi i file scaricati' . ($this->targetCreated ? ' e la cartella' : '');
         }
-        foreach (array_diff(scandir($t) ?: [], ['.', '..']) as $f) {
-            rrmdir($t . '/' . $f);
-        }
-        if ($this->targetCreated) {
-            @rmdir($t);
-        }
-        $msg = 'Pulizia: rimossi i file scaricati' . ($this->targetCreated ? ' e la cartella' : '');
         if ($this->dbCreated) {
             try {
                 $pdo = db_connect($this->cfg['db']['host'], $this->cfg['db']['user'], $this->cfg['db']['password']);
                 $pdo->exec('DROP DATABASE `' . str_replace('`', '', $this->cfg['db']['name']) . '`');
-                $msg .= ' e il database creato';
+                $msg .= ($msg === 'Pulizia:' ? '' : ' e') . ' rimosso il database creato';
             } catch (Throwable $e) {
                 // il database resta: nessun danno, lo si riusa o lo si elimina a mano
             }
         }
-        $this->log($msg . '.');
+        if ($msg !== 'Pulizia:') {
+            $this->log($msg . '.');
+        }
     }
 
     /** A job concluso non servono più le password in chiaro. */

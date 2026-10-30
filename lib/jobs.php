@@ -53,6 +53,14 @@ function validate_install(array $in): array
         $err[] = 'La cartella di destinazione non può stare dentro quella dell\'installer (verrebbe cancellata con lui).';
     } elseif (is_dir($target) && count(array_diff(scandir($target) ?: [], ['.', '..'])) > 0) {
         $err[] = 'La cartella di destinazione non è vuota.';
+    } else {
+        $parent = is_dir($target) ? $target : dirname($target);
+        while ($parent !== '/' && !is_dir($parent)) {
+            $parent = dirname($parent);
+        }
+        if (!is_writable($parent)) {
+            $err[] = "Il processo PHP non può scrivere in $parent: scegli un'altra cartella o correggi i permessi.";
+        }
     }
 
     $baseUrl = $s('base_url');
@@ -274,8 +282,23 @@ function validate_install(array $in): array
     return [$config, $err];
 }
 
+/** Id di un'installazione ancora in corso (un worker morto non conta), o null. */
+function running_job(): ?string
+{
+    foreach (glob(dirname(job_dir('x')) . '/*', GLOB_ONLYDIR) ?: [] as $d) {
+        $id = basename($d);
+        if (valid_job_id($id) && in_array(job_status($id, 0)['status']['state'] ?? '', ['running', 'queued'], true)) {
+            return $id;
+        }
+    }
+    return null;
+}
+
 function start_install(array $config): array
 {
+    if ($busy = running_job()) {
+        return ['error' => 'Un\'installazione è già in corso: attendi che finisca o annullala.', 'job' => $busy, 'busy' => true];
+    }
     $php = find_php_cli();
     if (!$php) {
         return ['error' => 'PHP CLI non trovato: impossibile avviare l\'installazione in background.'];
