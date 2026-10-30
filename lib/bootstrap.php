@@ -319,7 +319,7 @@ const INSTALLER_FILES = [
     'assets/app.css', 'assets/app.js', 'assets/logo.svg',
     'catalog/frontend.json', 'catalog/mageos.json', 'catalog/msi.json', 'catalog/search.json',
     'distros/italiana.json', 'distros/light.json', 'distros/normal.json',
-    'README.md', '.gitignore', 'lib/bootstrap.php', 'lib/catalog.php', 'lib/jobs.php', 'lib/magento-cli.php', 'lib/requirements.php',
+    'README.md', 'LICENSE', '.gitignore', 'lib/bootstrap.php', 'lib/catalog.php', 'lib/jobs.php', 'lib/magento-cli.php', 'lib/requirements.php',
     'worker.php', 'index.php',
 ];
 

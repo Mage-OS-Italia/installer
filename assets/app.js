@@ -768,7 +768,7 @@
         S.f[k] = val;
         S.touched[k] = true;
         if (k === 'target') { S.req = null; syncDerived(); }
-        if (k === 'version') { S.req = null; S.db = null; S.search = null; renderSide(); renderStep(); return; }
+        if (k === 'version') { S.req = null; S.db = null; S.search = null; S.maxStep = S.step; renderSide(); renderStep(); return; }
         if (k === 'platform') { onPlatformChanged(); return; }
         if (['db_host', 'db_name', 'db_user', 'db_password'].includes(k)) { S.db = null; const b = $('#db-test'); if (b) b.hidden = true; const ub = $('#unsupported-box'); if (ub) ub.innerHTML = ''; }
         if (k.startsWith('search_') && k !== 'search_engine') { S.search = null; const b = $('#search-test'); if (b) b.hidden = true; }
