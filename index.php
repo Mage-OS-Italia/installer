@@ -223,7 +223,7 @@ document.getElementById('remove-btn').onclick = async () => {
   document.body.innerHTML = '<main class="gate"><div class="card gate-card">' + msg + '</div></main>';
 };
 </script>
-<?php elseif (!$authorized): ?>
+<?php elseif (!$authorized): access_token(); // il file deve esistere già quando la pagina ne indica il percorso ?>
 <main class="gate">
   <div class="card gate-card">
     <img src="assets/logo.svg" alt="Magento Installer">
