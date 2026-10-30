@@ -28,34 +28,6 @@ header('X-Frame-Options: DENY');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
 
-/** Host con cui l'installer si apre su una macchina locale (TLD riservato .test, .localhost, loopback). */
-function is_local_host(string $host): bool
-{
-    $host = strtolower(trim($host));
-    $host = preg_match('/^\[([^\]]+)\](?::\d+)?$/', $host, $m) ? $m[1] : preg_replace('/:\d+$/', '', $host);
-    return $host === 'localhost' || $host === '::1' || preg_match('/\.(test|localhost)$/', $host) === 1
-        || preg_match('/^127(\.\d{1,3}){3}$/', $host) === 1;
-}
-
-/**
- * Accesso libero solo da loopback, senza proxy davanti e con un Host locale. Un indirizzo privato non basta:
- * dietro nginx, Docker, un tunnel o un load balancer ogni visitatore arriva da lì. Il controllo sull'Host
- * ferma il DNS rebinding. In tutti gli altri casi serve il token generato sul server.
- */
-function is_trusted_client(): bool
-{
-    $ip = $_SERVER['REMOTE_ADDR'] ?? '';
-    if ($ip !== '127.0.0.1' && $ip !== '::1') {
-        return false;
-    }
-    foreach (['HTTP_X_FORWARDED_FOR', 'HTTP_X_FORWARDED_HOST', 'HTTP_FORWARDED', 'HTTP_X_REAL_IP', 'HTTP_VIA', 'HTTP_CLIENT_IP', 'HTTP_CF_CONNECTING_IP', 'HTTP_TRUE_CLIENT_IP'] as $h) {
-        if (isset($_SERVER[$h])) {
-            return false;
-        }
-    }
-    return is_local_host((string)($_SERVER['HTTP_HOST'] ?? ''));
-}
-
 function token_file(): string
 {
     return app_tmp() . '/access-token';
@@ -82,7 +54,7 @@ function access_token(): string
     return $token;
 }
 
-$authorized = !empty($_SESSION['authorized']) || is_trusted_client();
+$authorized = !empty($_SESSION['authorized']);
 $locked = is_file(__DIR__ . '/.installed');
 $action = (string)($_GET['a'] ?? '');
 
@@ -219,7 +191,7 @@ document.getElementById('remove-btn').onclick = async () => {
   const r = await fetch('?a=remove', {method:'POST', headers:{'X-CSRF': <?= json_encode($_SESSION['csrf']) ?>, 'Content-Type':'application/json'}, body:'{}'});
   const d = await r.json().catch(() => ({}));
   const msg = d.ok ? '<h1>Installer rimosso</h1><p>Puoi chiudere questa pagina.</p>'
-    : '<h1>Rimozione non riuscita</h1><p>Non sono riuscito a eliminare: ' + (d.failed || []).map((f) => f.replace(/[<>&]/g, '')).join(', ') + '. Cancellali a mano dal server; l\'installer resta bloccato.</p>';
+    : '<h1>Rimozione non riuscita</h1><p>' + (d.error ? String(d.error).replace(/[<>&]/g, '') : 'Non sono riuscito a eliminare: ' + (d.failed || []).map((f) => f.replace(/[<>&]/g, '')).join(', ') + '. Cancellali a mano dal server.') + (d.locked ? ' L\'installer resta bloccato.' : '') + '</p>';
   document.body.innerHTML = '<main class="gate"><div class="card gate-card">' + msg + '</div></main>';
 };
 </script>
@@ -228,7 +200,7 @@ document.getElementById('remove-btn').onclick = async () => {
   <div class="card gate-card">
     <img src="assets/logo.svg" alt="Magento Installer">
     <h1>Accesso protetto</h1>
-    <p>Questo installer non è stato aperto da un indirizzo locale (o passa da un proxy): per continuare inserisci il token di accesso.</p>
+    <p>Per continuare inserisci il token di accesso.</p>
     <p class="muted">Lo trovi sul server nel file:<br><code><?= h(token_file()) ?></code></p>
     <form id="auth-form">
       <input type="password" id="token" placeholder="Token di accesso" autocomplete="off" autofocus>

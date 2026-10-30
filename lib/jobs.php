@@ -366,8 +366,11 @@ function start_install_locked(array $config): array
     file_put_contents($dir . '/log.txt', '');
 
     // setsid: il worker non muore se il servizio web si riavvia; i descrittori 3-9 chiusi: niente socket di ascolto ereditato (php -S).
+    // Su macOS setsid non esiste: lo fa perl (POSIX::setsid) prima di sostituirsi al PHP.
     $setsid = sh('command -v setsid');
-    $cmd = 'nohup ' . ($setsid !== '' ? escapeshellarg($setsid) . ' ' : '') . escapeshellarg($php) . ' -d memory_limit=-1 ' . escapeshellarg(APP_ROOT . '/worker.php') . ' ' . escapeshellarg($id)
+    $perl = $setsid === '' ? sh('command -v perl') : '';
+    $detach = $setsid !== '' ? escapeshellarg($setsid) . ' ' : ($perl !== '' ? escapeshellarg($perl) . ' -MPOSIX -e ' . escapeshellarg('POSIX::setsid(); exec @ARGV or exit 127') . ' -- ' : '');
+    $cmd = 'nohup ' . $detach . escapeshellarg($php) . ' -d memory_limit=-1 ' . escapeshellarg(APP_ROOT . '/worker.php') . ' ' . escapeshellarg($id)
         . ' < /dev/null > ' . escapeshellarg($dir . '/worker.out') . ' 2>&1 3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&- &';
     $p = proc_open(['/bin/sh', '-c', $cmd], [], $pipes, null, shell_env());
     if (!is_resource($p)) {
@@ -383,6 +386,22 @@ function scrub_job_dir(string $dir): void
     @unlink($dir . '/job.json');
     @unlink($dir . '/install-args.json');
     rrmdir($dir . '/composer-home');
+}
+
+/** Il processo esiste ancora? Senza l'estensione posix (php-process su RHEL/Remi) si ripiega su /proc e poi su kill -0. */
+function pid_alive(int $pid): bool
+{
+    if (function_exists('posix_kill')) {
+        return @posix_kill($pid, 0) || posix_get_last_error() === 1; // EPERM: esiste ma è di un altro utente
+    }
+    if (is_dir('/proc/self')) {
+        return is_dir('/proc/' . $pid);
+    }
+    if (function_exists('exec') && !in_array('exec', array_map('trim', explode(',', (string)ini_get('disable_functions'))), true)) {
+        @exec('kill -0 ' . $pid . ' 2>/dev/null', $o, $rc);
+        return $rc === 0;
+    }
+    return true; // non si può sapere: meglio non dichiarare morto un worker vivo
 }
 
 function job_status(string $id, int $since): array
@@ -403,7 +422,7 @@ function job_status(string $id, int $since): array
     // Se il worker è morto senza chiudere lo stato, lo segnaliamo.
     if (in_array($status['state'], ['running', 'queued'], true)) {
         $pid = (int)($status['pid'] ?? 0);
-        $stale = $pid > 0 && function_exists('posix_kill') && !@posix_kill($pid, 0);
+        $stale = $pid > 0 && !pid_alive($pid);
         $age = time() - (int)@filemtime($dir . '/status.json');
         if ($stale || ($status['state'] === 'queued' && $age > 60)) {
             $out = trim((string)@file_get_contents($dir . '/worker.out'));

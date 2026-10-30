@@ -31,7 +31,13 @@ function mageos_release_dates(): array
             return $data;
         }
     }
-    $res = http_get('https://api.github.com/repos/mage-os/mageos-magento2/releases?per_page=100', 10, ['Accept: application/vnd.github+json']);
+    // GitHub non risponde: per qualche minuto non si riprova, altrimenti ogni caricamento aspetta il timeout.
+    $fail = $cache . '.fail';
+    $stale = static fn(): array => is_file($cache) ? (array)json_decode((string)file_get_contents($cache), true) : [];
+    if (is_file($fail) && filemtime($fail) > time() - 300) {
+        return $stale();
+    }
+    $res = http_get('https://api.github.com/repos/mage-os/mageos-magento2/releases?per_page=100', 4, ['Accept: application/vnd.github+json']);
     $dates = [];
     if ($res['ok'] && $res['code'] === 200) {
         foreach ((array)json_decode($res['body'], true) as $r) {
@@ -42,9 +48,11 @@ function mageos_release_dates(): array
     }
     if ($dates) {
         @file_put_contents($cache, json_encode($dates));
+        @unlink($fail);
         return $dates;
     }
-    return is_file($cache) ? (array)json_decode((string)file_get_contents($cache), true) : [];
+    @touch($fail);
+    return $stale();
 }
 
 /**

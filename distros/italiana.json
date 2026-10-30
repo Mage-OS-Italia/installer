@@ -34,7 +34,7 @@
         },
         {
             "name": "mage-os-italia/module-language-it_it",
-            "constraint": "*",
+            "constraint": ">=0.0.26 <1.0",
             "required": true,
             "label": "Pacchetto lingua italiano (it_IT)",
             "description": "Traduzioni di storefront e admin."

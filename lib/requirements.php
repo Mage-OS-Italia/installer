@@ -20,7 +20,7 @@ function php_cli_info(): ?array
     $code = 'echo json_encode(["bin"=>PHP_BINARY,"version"=>PHP_VERSION,"ext"=>array_map("strtolower",get_loaded_extensions()),'
         . '"ini"=>["memory_limit"=>ini_get("memory_limit"),"opcache"=>ini_get("opcache.enable_cli"),"save_comments"=>ini_get("opcache.save_comments"),'
         . '"timezone"=>ini_get("date.timezone")]]);';
-    $out = sh(escapeshellarg($php) . ' -r ' . escapeshellarg($code));
+    $out = sh(escapeshellarg($php) . ' -d display_errors=stderr -d display_startup_errors=0 -r ' . escapeshellarg($code));
     $data = json_decode($out, true);
     return $info = is_array($data) ? $data + ['path' => $php] : null;
 }
@@ -328,19 +328,24 @@ function test_search(array $p): array
     if (!empty($p['user'])) {
         $headers[] = 'Authorization: Basic ' . base64_encode($p['user'] . ':' . ($p['password'] ?? ''));
     }
+    // Le credenziali viaggiano in chiaro solo verso un host locale; su un host remoto si prova prima HTTPS e l'HTTP parte senza password.
+    $local = $host === 'localhost' || preg_match('/^127(\.\d{1,3}){3}$/', $host) === 1;
+    // Tentativi in ordine: (schema, credenziali, verifica del certificato). Un certificato autogenerato è la norma su OpenSearch
+    // con la sicurezza di default, ma senza verifica le credenziali si inviano solo a un host locale.
+    $attempts = $local
+        ? [['http', true, true], ['https', true, true], ['https', true, false]]
+        : [['https', true, true], ['https', false, false], ['http', false, true]];
+    $r = ['ok' => false, 'error' => ''];
     $scheme = 'http';
-    $r = http_get("http://$host:$port/", 5, $headers);
     $verified = true;
-    if (!$r['ok']) {
-        $scheme = 'https';
-        $r = http_get("https://$host:$port/", 5, $headers);
-        if (!$r['ok']) {
-            // Certificato autogenerato: è la norma su OpenSearch con la sicurezza di default. Le credenziali però si inviano
-            // senza verifica solo a un host locale; altrove si controlla solo che risponda, senza password.
-            $local = $host === 'localhost' || preg_match('/^127(\.\d{1,3}){3}$/', $host) === 1;
-            $r = http_get("https://$host:$port/", 5, $local ? $headers : [], false, false);
-            $verified = false;
+    foreach ($attempts as [$scheme, $auth, $verified]) {
+        $r = http_get("$scheme://$host:$port/", 5, $auth ? $headers : [], false, $verified);
+        if ($r['ok']) {
+            break;
         }
+    }
+    if ($r['ok'] && $r['code'] === 401 && $headers && $scheme === 'http' && !$local) {
+        return ['status' => 'fail', 'message' => 'Il servizio richiede l\'autenticazione ma risponde solo in HTTP: le credenziali non sono state inviate perché passerebbero in chiaro. Abilita HTTPS con un certificato valido.'];
     }
     if (!$r['ok']) {
         return ['status' => 'fail', 'message' => "Nessuna risposta da $host:$port" . ($r['error'] ? ' (' . $r['error'] . ')' : '') . '.'];
@@ -367,5 +372,8 @@ function test_search(array $p): array
     if ($engine === 'elasticsearch7' && !empty($p['version']) && !es7_supported((string)($p['platform'] ?? 'magento'), (string)$p['version'])) {
         return ['status' => 'fail', 'message' => "$label non è supportato da questa versione: il modulo Elasticsearch 7 è stato tolto. Usa OpenSearch o Elasticsearch 8."] + $extra;
     }
-    return ['status' => 'ok', 'version' => $num, 'message' => "$label raggiungibile" . ($scheme === 'https' ? ($verified ? ' (HTTPS).' : ' (HTTPS, certificato non verificato).') : '.')] + $extra;
+    if (!$verified) {
+        return ['status' => 'warn', 'version' => $num, 'message' => "$label raggiungibile in HTTPS, ma il certificato non è verificabile: Magento non ha un'opzione per ignorarlo e l'installazione potrebbe fallire dopo il passo di composer. Usa un certificato valido o l'HTTP su rete locale."] + $extra;
+    }
+    return ['status' => 'ok', 'version' => $num, 'message' => "$label raggiungibile" . ($scheme === 'https' ? ' (HTTPS).' : '.')] + $extra;
 }

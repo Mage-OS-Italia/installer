@@ -314,46 +314,60 @@ function rrmdir(string $dir): bool
     return @rmdir($dir) && $ok;
 }
 
-/** File e cartelle distribuiti con l'installer: la rimozione tocca solo questi, mai il resto della cartella. */
-const INSTALLER_FILES = ['assets', 'catalog', 'distros', 'README.md', '.gitignore', 'lib', 'worker.php', 'index.php'];
+/** File distribuiti con l'installer: la rimozione tocca solo questi (mai una cartella intera, che potrebbe contenere file del sito). */
+const INSTALLER_FILES = [
+    'assets/app.css', 'assets/app.js', 'assets/logo.svg',
+    'catalog/frontend.json', 'catalog/mageos.json', 'catalog/msi.json', 'catalog/search.json',
+    'distros/italiana.json', 'distros/light.json', 'distros/normal.json',
+    'README.md', '.gitignore', 'lib/bootstrap.php', 'lib/catalog.php', 'lib/jobs.php', 'lib/magento-cli.php', 'lib/requirements.php',
+    'worker.php', 'index.php',
+];
+
+/** Cartelle create dall'installer, tolte solo se restano vuote. */
+const INSTALLER_DIRS = ['assets', 'catalog', 'distros', 'lib'];
 
 /**
  * Rimuove l'installer. `.installed` (il blocco) si toglie solo se è sparito tutto il resto.
- * Ritorna ok, i file che non si sono potuti eliminare e ciò che nella cartella non è dell'installer.
+ * Ritorna ok, i file che non si sono potuti eliminare, ciò che nella cartella non è dell'installer e se il blocco è in piedi.
  */
 function remove_installer(): array
 {
     $root = realpath(APP_ROOT);
     if (!$root || $root === '/' || $root === home_dir()) {
-        return ['ok' => false, 'error' => 'Percorso non sicuro.', 'failed' => [], 'left' => []];
+        return ['ok' => false, 'error' => 'Percorso non sicuro.', 'failed' => [], 'left' => [], 'locked' => is_file(APP_ROOT . '/.installed')];
+    }
+    // Il blocco prima di tutto: se non si può scrivere non si cancella nulla, altrimenti resterebbe un installer svuotato e ancora usabile.
+    if (!is_file("$root/.installed") && @file_put_contents("$root/.installed", date('c') . "\n") === false) {
+        return ['ok' => false, 'error' => 'La cartella non è scrivibile: non ho eliminato nulla.', 'failed' => [], 'left' => [], 'locked' => false];
     }
     $failed = [];
     // Prima i file di contorno; codice (lib, worker, index) solo se è andato tutto bene, così un'installer rimasto a metà resta almeno in grado di mostrare il blocco.
-    $code = ['lib', 'worker.php', 'index.php'];
-    foreach (array_diff(INSTALLER_FILES, $code) as $f) {
-        if (!rrmdir("$root/$f")) {
-            $failed[] = $f;
+    $isCode = static fn(string $f): bool => str_starts_with($f, 'lib/') || $f === 'worker.php' || $f === 'index.php';
+    foreach ([false, true] as $code) {
+        if ($failed) {
+            break;
         }
-    }
-    if (!$failed) {
-        foreach ($code as $f) {
-            if (!rrmdir("$root/$f")) {
+        foreach (INSTALLER_FILES as $f) {
+            if ($isCode($f) === $code && (is_file("$root/$f") || is_link("$root/$f")) && !@unlink("$root/$f")) {
                 $failed[] = $f;
             }
         }
-    }
-    if ($failed) {
-        // Rimozione incompleta: il blocco deve restare (o essere creato), così l'installer rimasto non si può usare.
-        if (!is_file("$root/.installed")) {
-            @file_put_contents("$root/.installed", date('c') . "\n");
+        if (!$code) {
+            foreach (INSTALLER_DIRS as $d) {
+                if ($d !== 'lib' && is_dir("$root/$d")) {
+                    @rmdir("$root/$d");
+                }
+            }
         }
-    } else {
+    }
+    if (!$failed) {
+        @rmdir("$root/lib");
         rrmdir("$root/.installed");
         rrmdir(app_tmp());
         @rmdir($root);
     }
     $left = is_dir($root) ? array_values(array_diff(scandir($root) ?: [], ['.', '..'])) : [];
-    return ['ok' => !$failed, 'failed' => $failed, 'left' => $left];
+    return ['ok' => !$failed, 'failed' => $failed, 'left' => $left, 'locked' => is_file("$root/.installed")];
 }
 
 /** Percorso assoluto senza `.`, `//` e link simbolici (anche se non esiste ancora): serve a confrontare cartelle. */

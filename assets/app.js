@@ -470,7 +470,7 @@
   }
   function step2Ok() {
     const dbOk = S.db && (S.db.status === 'ok' || (S.db.status === 'warn' && S.f.cleanup_db) || (S.db.unsupported && S.f.allow_unsupported_db));
-    return !!(dbOk && (useMysql() || (S.search && S.search.status === 'ok')));
+    return !!(dbOk && (useMysql() || (S.search && ['ok', 'warn'].includes(S.search.status))));
   }
 
   // ------------------------------------------------------------ step 3
@@ -715,7 +715,7 @@
       saveJob(null);
       note.textContent = "L'installer è stato eliminato dal server: puoi chiudere questa pagina." + ((r.left || []).length ? ` Nella cartella sono rimasti altri file, non dell'installer: ${r.left.join(', ')}.` : '');
     } else {
-      note.textContent = "Non sono riuscito a eliminare l'installer" + ((r.failed || []).length ? ` (rimasti: ${r.failed.join(', ')})` : '') + ": è bloccato, cancellalo a mano dal server o riprova con il pulsante.";
+      note.textContent = (r.error || "Non sono riuscito a eliminare l'installer" + ((r.failed || []).length ? ` (rimasti: ${r.failed.join(', ')})` : '')) + (r.locked ? ': è bloccato, cancellalo a mano dal server o riprova con il pulsante.' : ': cancellalo a mano dal server o riprova con il pulsante.');
       const b = $('[data-act=remove]');
       if (b) b.hidden = false;
     }
@@ -861,7 +861,7 @@
         if (confirm("Eliminare definitivamente l'installer dal server?")) {
           const r = await api('remove', {});
           if (r.ok) { saveJob(null); root.innerHTML = '<div class="boot"><p>Installer rimosso. Puoi chiudere questa pagina.</p></div>'; }
-          else alert('Rimozione non riuscita' + ((r.failed || []).length ? ' (rimasti: ' + r.failed.join(', ') + ')' : '') + ': cancella a mano i file dal server. L\'installer resta bloccato.');
+          else alert((r.error || 'Rimozione non riuscita' + ((r.failed || []).length ? ' (rimasti: ' + r.failed.join(', ') + ')' : '')) + ': cancella a mano i file dal server.' + (r.locked ? ' L\'installer resta bloccato.' : ''));
         }
         break;
     }
