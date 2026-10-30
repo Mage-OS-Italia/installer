@@ -17,14 +17,50 @@ const PLATFORMS = [
 
 /**
  * Fine del supporto regolare per release Magento (le patch -pN seguono la release), dalla tabella delle release
- * Adobe Commerce su experienceleague.adobe.com (Open Source segue le stesse date). Mage-OS non pubblica date.
+ * Adobe Commerce su experienceleague.adobe.com (Open Source segue le stesse date).
  */
 const MAGENTO_EOL = ['2.4.6' => '2026-08-11', '2.4.7' => '2027-05-31', '2.4.8' => '2028-05-31', '2.4.9' => '2029-05-31'];
 
-/** Data di fine supporto della versione o null se sconosciuta. */
-function eol_date(string $platform, string $version): ?string
+/** Date di rilascio Mage-OS (tag => Y-m-d) dalle release GitHub, in cache 1 ora; vuoto se non raggiungibili. */
+function mageos_release_dates(): array
 {
-    return $platform === 'magento' ? (MAGENTO_EOL[preg_replace('/-p\d+$/', '', $version)] ?? null) : null;
+    $cache = app_tmp('cache') . '/mageos-releases-v1.json';
+    if (is_file($cache) && filemtime($cache) > time() - 3600) {
+        $data = json_decode((string)file_get_contents($cache), true);
+        if (is_array($data)) {
+            return $data;
+        }
+    }
+    $res = http_get('https://api.github.com/repos/mage-os/mageos-magento2/releases?per_page=100', 10, ['Accept: application/vnd.github+json']);
+    $dates = [];
+    if ($res['ok'] && $res['code'] === 200) {
+        foreach ((array)json_decode($res['body'], true) as $r) {
+            if (!empty($r['tag_name']) && !empty($r['published_at']) && empty($r['prerelease'])) {
+                $dates[(string)$r['tag_name']] = substr((string)$r['published_at'], 0, 10);
+            }
+        }
+    }
+    if ($dates) {
+        @file_put_contents($cache, json_encode($dates));
+        return $dates;
+    }
+    return is_file($cache) ? (array)json_decode((string)file_get_contents($cache), true) : [];
+}
+
+/**
+ * Aggiunge `eol` a ogni versione (elenco dalla più recente). Mage-OS supporta solo l'ultima release
+ * (mage-os.org/product/roadmap): ogni versione finisce il giorno in cui esce la successiva.
+ */
+function with_eol(string $platform, array $versions): array
+{
+    $released = $platform === 'mageos' ? mageos_release_dates() : [];
+    foreach ($versions as $i => &$row) {
+        $row['time'] = $row['time'] ?? ($released[$row['version']] ?? null);
+        $row['eol'] = $platform === 'magento'
+            ? (MAGENTO_EOL[preg_replace('/-p\d+$/', '', $row['version'])] ?? null)
+            : ($i > 0 ? ($released[$versions[$i - 1]['version']] ?? null) : null);
+    }
+    return $versions;
 }
 
 function platform_of(string $id): ?array
