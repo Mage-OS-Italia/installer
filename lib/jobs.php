@@ -49,6 +49,8 @@ function validate_install(array $in): array
         $err[] = 'La cartella di destinazione deve essere un percorso assoluto.';
     } elseif ($target === '/' || $target === home_dir() || str_starts_with(APP_ROOT . '/', $target . '/')) {
         $err[] = 'La cartella di destinazione non può contenere l\'installer.';
+    } elseif (str_starts_with($target . '/', rtrim(APP_ROOT, '/') . '/')) {
+        $err[] = 'La cartella di destinazione non può stare dentro quella dell\'installer (verrebbe cancellata con lui).';
     } elseif (is_dir($target) && count(array_diff(scandir($target) ?: [], ['.', '..'])) > 0) {
         $err[] = 'La cartella di destinazione non è vuota.';
     }
@@ -152,6 +154,12 @@ function validate_install(array $in): array
                 if (!empty($pkg['repository']) && isset($byRepo[$pkg['repository']])) {
                     $repos[$pkg['repository']] = $byRepo[$pkg['repository']];
                 }
+            }
+        }
+        $known = array_column(mageos_modules(), 'name');
+        foreach (array_keys($mageos) as $n) {
+            if (!in_array((string)$n, $known, true)) {
+                $err[] = 'Modulo Mage-OS sconosciuto: ' . $n . '.';
             }
         }
         foreach (mageos_modules() as $m) {

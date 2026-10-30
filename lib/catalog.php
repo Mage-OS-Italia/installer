@@ -184,7 +184,7 @@ function parse_hyva_keys(string $text): ?array
     if (!preg_match('#' . $host . '/([A-Za-z0-9][A-Za-z0-9_.-]*)#', $text, $p)) {
         return null;
     }
-    if (!preg_match('#' . $host . '[\'"]?\s+token\s+[\'"]?([A-Za-z0-9_-]{8,})#', $text, $k)
+    if (!preg_match('#' . $host . '[\'"]?\s+[\'"]?token[\'"]?\s+[\'"]?([A-Za-z0-9_-]{8,})#', $text, $k)
         && !preg_match('#"password"\s*:\s*"([A-Za-z0-9_-]{8,})"#', $text, $k)) {
         return null;
     }

@@ -32,6 +32,10 @@ final class Worker
     private string $dbVersion = '';
     private bool $dbIsMaria = false;
     private array $warnings = [];
+    /** Cartella verificata vuota (o inesistente) all'avvio: solo allora può essere ripulita dopo un annullamento o un errore. */
+    private bool $targetClean = false;
+    private bool $targetCreated = false;
+    private bool $dbCreated = false;
 
     private const STEPS = [
         'preflight' => 'Verifica ambiente e database',
@@ -82,6 +86,7 @@ final class Worker
             $this->status['state'] = $e->getMessage() === 'cancelled' ? 'cancelled' : 'failed';
             $this->status['error'] = $e->getMessage() === 'cancelled' ? 'Installazione annullata.' : str_replace($this->secrets, '••••••', $e->getMessage());
             $this->log('✖ ' . $this->status['error']);
+            $this->rollback();
             $this->scrub();
             $this->save();
             return 1;
@@ -89,6 +94,7 @@ final class Worker
             $this->status['state'] = 'failed';
             $this->status['error'] = str_replace($this->secrets, '••••••', $e->getMessage());
             $this->log('✖ Errore: ' . $e->getMessage());
+            $this->rollback();
             $this->scrub();
             $this->save();
             return 1;
@@ -108,6 +114,8 @@ final class Worker
         if (is_dir($c['target']) && count(array_diff(scandir($c['target']) ?: [], ['.', '..'])) > 0) {
             throw new StepFailure('La cartella di destinazione non è più vuota: ' . $c['target']);
         }
+        $this->targetCreated = !is_dir($c['target']);
+        $this->targetClean = true;
 
         $this->log('Connessione al database ' . $c['db']['host'] . '…');
         try {
@@ -136,6 +144,7 @@ final class Worker
             } catch (Throwable $e) {
                 throw new StepFailure("Impossibile creare il database \"$name\": " . $e->getMessage());
             }
+            $this->dbCreated = true;
             $this->log("Database \"$name\" creato.");
         } else {
             $st = $pdo->prepare('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ?');
@@ -685,6 +694,44 @@ final class Worker
         $tmp = $this->dir . '/status.json.tmp';
         file_put_contents($tmp, json_encode($this->status, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
         rename($tmp, $this->dir . '/status.json');
+    }
+
+    /**
+     * Annullamento o errore prima di setup:install: rimuove quello che l'installer ha creato (cartella e database),
+     * così si può riprovare subito. Dopo setup:install non tocca nulla: l'installazione parziale resta per il debug.
+     */
+    private function rollback(): void
+    {
+        $installStarted = false;
+        foreach ($this->status['steps'] as $st) {
+            if ($st['id'] === 'install' && $st['state'] !== 'pending') {
+                $installStarted = true;
+            }
+        }
+        if ($installStarted || !$this->targetClean) {
+            return;
+        }
+        $t = rtrim((string)$this->cfg['target'], '/');
+        if ($t === '' || $t === '/' || $t === home_dir() || !is_dir($t)) {
+            return;
+        }
+        foreach (array_diff(scandir($t) ?: [], ['.', '..']) as $f) {
+            rrmdir($t . '/' . $f);
+        }
+        if ($this->targetCreated) {
+            @rmdir($t);
+        }
+        $msg = 'Pulizia: rimossi i file scaricati' . ($this->targetCreated ? ' e la cartella' : '');
+        if ($this->dbCreated) {
+            try {
+                $pdo = db_connect($this->cfg['db']['host'], $this->cfg['db']['user'], $this->cfg['db']['password']);
+                $pdo->exec('DROP DATABASE `' . str_replace('`', '', $this->cfg['db']['name']) . '`');
+                $msg .= ' e il database creato';
+            } catch (Throwable $e) {
+                // il database resta: nessun danno, lo si riusa o lo si elimina a mano
+            }
+        }
+        $this->log($msg . '.');
     }
 
     /** A job concluso non servono più le password in chiaro. */

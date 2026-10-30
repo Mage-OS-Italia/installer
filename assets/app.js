@@ -65,7 +65,7 @@
   function parseHyva(text) {
     const host = 'hyva-themes\\.repo\\.packagist\\.com';
     const p = text.match(new RegExp(host + '/([A-Za-z0-9][A-Za-z0-9_.-]*)'));
-    const k = text.match(new RegExp(host + '[\'"]?\\s+token\\s+[\'"]?([A-Za-z0-9_-]{8,})')) || text.match(/"password"\s*:\s*"([A-Za-z0-9_-]{8,})"/);
+    const k = text.match(new RegExp(host + '[\'"]?\\s+[\'"]?token[\'"]?\\s+[\'"]?([A-Za-z0-9_-]{8,})')) || text.match(/"password"\s*:\s*"([A-Za-z0-9_-]{8,})"/);
     return p && k ? { project: p[1], key: k[1] } : null;
   }
   /** Catalogo piccolo: ricerca MySQL senza OpenSearch, come su threecommerce. */
