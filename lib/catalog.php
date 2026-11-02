@@ -16,6 +16,12 @@ const PLATFORMS = [
 ];
 
 /**
+ * Versioni non proposte perché non si installano: la 4.0.0 di Mage-OS richiede mage-os/module-admin-activity-log 2.0.4,
+ * pubblicato solo fino alla 2.0.3. Da togliere quando il pacchetto esce.
+ */
+const SKIPPED_VERSIONS = ['mageos' => ['4.0.0']];
+
+/**
  * Fine del supporto regolare per release Magento (le patch -pN seguono la release), dalla tabella delle release
  * Adobe Commerce su experienceleague.adobe.com (Open Source segue le stesse date).
  */
@@ -85,7 +91,7 @@ function platform_versions(string $platform, bool $refresh = false): array
 {
     $p = PLATFORMS[$platform];
     $pkg = $p['vendor'] . '/product-community-edition';
-    $cache = app_tmp('cache') . "/versions-$platform-v3.json";
+    $cache = app_tmp('cache') . "/versions-$platform-v4.json";
     if (!$refresh && is_file($cache) && filemtime($cache) > time() - 3600) {
         $data = json_decode((string)file_get_contents($cache), true);
         if (is_array($data) && $data) {
@@ -109,7 +115,7 @@ function platform_versions(string $platform, bool $refresh = false): array
                 }
             }
             $v = (string)($prev['version'] ?? '');
-            if (!preg_match($p['regex'], $v) || version_compare($v, $p['min'], '<')) {
+            if (!preg_match($p['regex'], $v) || version_compare($v, $p['min'], '<') || in_array($v, SKIPPED_VERSIONS[$platform] ?? [], true)) {
                 continue;
             }
             $req = $prev['require'] ?? [];
