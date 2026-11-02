@@ -27,6 +27,9 @@ if (empty($_SESSION['csrf'])) {
 header('X-Frame-Options: DENY');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
+// Script solo da questo sito o con nonce; gli stili inline restano perché l'interfaccia li usa negli attributi style.
+$nonce = base64_encode(random_bytes(16));
+header("Content-Security-Policy: default-src 'none'; script-src 'self' 'nonce-$nonce'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
 
 function token_file(): string
 {
@@ -185,7 +188,7 @@ $asset = fn(string $f): string => 'assets/' . $f . '?v=' . filemtime(__DIR__ . '
     <button class="btn danger" id="remove-btn">Rimuovi installer</button>
   </div>
 </main>
-<script>
+<script nonce="<?= h($nonce) ?>">
 document.getElementById('remove-btn').onclick = async () => {
   if (!confirm("Eliminare definitivamente l'installer dal server?")) return;
   const r = await fetch('?a=remove', {method:'POST', headers:{'X-CSRF': <?= json_encode($_SESSION['csrf']) ?>, 'Content-Type':'application/json'}, body:'{}'});
@@ -209,7 +212,7 @@ document.getElementById('remove-btn').onclick = async () => {
     </form>
   </div>
 </main>
-<script>
+<script nonce="<?= h($nonce) ?>">
 document.getElementById('auth-form').onsubmit = async (e) => {
   e.preventDefault();
   const r = await fetch('?a=auth', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({token: document.getElementById('token').value})});
@@ -220,7 +223,7 @@ document.getElementById('auth-form').onsubmit = async (e) => {
 <div id="app" class="app" data-csrf="<?= h($_SESSION['csrf']) ?>">
   <div class="boot"><div class="spinner"></div><p>Caricamento…</p></div>
 </div>
-<script src="<?= h($asset('app.js')) ?>"></script>
+<script src="<?= h($asset('app.js')) ?>" nonce="<?= h($nonce) ?>"></script>
 <?php endif; ?>
 </body>
 </html>
