@@ -194,7 +194,8 @@ final class Worker
         file_put_contents($home . '/auth.json', json_encode(['http-basic' => (object)$auth], JSON_UNESCAPED_SLASHES));
         chmod($home . '/auth.json', 0600);
         $this->composerBase = [
-            'cmd' => escapeshellarg($this->php) . ' -d memory_limit=-1 ' . escapeshellarg($composer),
+            // default_socket_timeout: un download fermo cade dopo 60 s e composer lo ritenta.
+            'cmd' => escapeshellarg($this->php) . ' -d memory_limit=-1 -d default_socket_timeout=60 ' . escapeshellarg($composer),
             'env' => [
                 'COMPOSER_HOME' => $home,
                 'COMPOSER_CACHE_DIR' => app_tmp('composer-cache'),
@@ -875,6 +876,9 @@ final class Worker
     /** Esegue un comando in streaming: ogni riga va nel log, $onLine la riceve per estrarre l'avanzamento. */
     private function run(string $cmd, string $cwd, array $env = [], ?callable $onLine = null, ?string $display = null): int
     {
+        // Composer senza alcun output per questo tempo è considerato bloccato (rete ferma, download appeso).
+        $idleLimit = isset($env['COMPOSER_HOME']) ? 600 : 0;
+        $lastOutput = time();
         // $display è la riga da mostrare quando il comando vero contiene dati riservati: va già costruita senza segreti.
         $this->log('$ ' . preg_replace('/\s+/', ' ', mb_strimwidth($display ?? $cmd, 0, 260, '…')));
         $p = proc_open('exec ' . $cmd, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $cwd, shell_env($env));
@@ -908,6 +912,7 @@ final class Worker
                     $i = $s === $pipes[1] ? 1 : 2;
                     $chunk = fread($s, 65536);
                     if ($chunk !== false && $chunk !== '') {
+                        $lastOutput = time();
                         $buf[$i] .= $chunk;
                         while (preg_match('/^(.*?)[\r\n]+(.*)$/s', $buf[$i], $m)) {
                             $emit($m[1]);
@@ -923,6 +928,14 @@ final class Worker
                 $this->killTree($pid, 9);
                 proc_close($p);
                 throw new StepFailure('cancelled');
+            }
+            if ($idleLimit && time() - $lastOutput > $idleLimit) {
+                $pid = (int)(proc_get_status($p)['pid'] ?? 0);
+                $this->killTree($pid, 15);
+                sleep(1);
+                $this->killTree($pid, 9);
+                proc_close($p);
+                throw new StepFailure('Composer non dà output da ' . intdiv($idleLimit, 60) . ' minuti: probabile download bloccato o rete ferma. Riprova l\'installazione.');
             }
             $st = proc_get_status($p);
             if (!$st['running']) {
