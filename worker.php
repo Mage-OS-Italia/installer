@@ -878,8 +878,12 @@ final class Worker
     /** Esegue un comando in streaming: ogni riga va nel log, $onLine la riceve per estrarre l'avanzamento. */
     private function run(string $cmd, string $cwd, array $env = [], ?callable $onLine = null, ?string $display = null): int
     {
-        // Composer senza alcun output per questo tempo è considerato bloccato (rete ferma, download appeso).
-        $idleLimit = isset($env['COMPOSER_HOME']) ? 600 : 0;
+        // Composer senza output né nuovi file in cache per questo tempo è considerato bloccato (rete ferma, download appeso).
+        // Con --no-progress tace per tutta la fase dei download in parallelo: su una rete lenta può durare a lungo.
+        $idleLimit = isset($env['COMPOSER_HOME']) ? 1800 : 0;
+        $cacheDir = isset($env['COMPOSER_HOME']) ? $env['COMPOSER_HOME'] . '/cache' : '';
+        $cacheSize = 0;
+        $cacheCheck = 0;
         $lastOutput = time();
         // $display è la riga da mostrare quando il comando vero contiene dati riservati: va già costruita senza segreti.
         $this->log('$ ' . preg_replace('/\s+/', ' ', mb_strimwidth($display ?? $cmd, 0, 260, '…')));
@@ -931,13 +935,31 @@ final class Worker
                 proc_close($p);
                 throw new StepFailure('cancelled');
             }
+            if ($cacheDir !== '' && time() - $cacheCheck >= 15) {
+                // I download in corso scrivono nella cache di Composer: se cresce, il processo è vivo anche senza output.
+                $cacheCheck = time();
+                $size = 0;
+                try {
+                    if (is_dir($cacheDir)) {
+                        foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($cacheDir, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::LEAVES_ONLY, RecursiveIteratorIterator::CATCH_GET_CHILD) as $fi) {
+                            $size += (int)@$fi->getSize();
+                        }
+                    }
+                } catch (Throwable) {
+                    // directory sparita o illeggibile: si conta solo l'output
+                }
+                if ($size > $cacheSize) {
+                    $lastOutput = time();
+                }
+                $cacheSize = $size;
+            }
             if ($idleLimit && time() - $lastOutput > $idleLimit) {
                 $pid = (int)(proc_get_status($p)['pid'] ?? 0);
                 $this->killTree($pid, 15);
                 sleep(1);
                 $this->killTree($pid, 9);
                 proc_close($p);
-                throw new StepFailure('Composer non dà output da ' . intdiv($idleLimit, 60) . ' minuti: probabile download bloccato o rete ferma. Riprova l\'installazione.');
+                throw new StepFailure('Composer non dà output né scarica nulla da ' . intdiv($idleLimit, 60) . ' minuti: probabile download bloccato o rete ferma. Riprova l\'installazione.');
             }
             $st = proc_get_status($p);
             if (!$st['running']) {
