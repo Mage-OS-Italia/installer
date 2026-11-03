@@ -46,6 +46,14 @@
         "packages": {
             "hyva-themes/magento2-default-theme": "*"
         },
+        "csp": {
+            "label": "Variante CSP",
+            "description": "Tema Hyvä per siti con Content-Security-Policy rigorosa (Alpine senza unsafe-eval, tema Hyva/default-csp). Supporta solo un sottoinsieme di Alpine: i moduli di compatibilità di terze parti e i checkout vanno verificati. Richiede che la licenza includa il pacchetto CSP.",
+            "theme_path": "Hyva/default-csp",
+            "packages": {
+                "hyva-themes/magento2-default-theme-csp": "*"
+            }
+        },
         "replace": [
             "{vendor}/theme-frontend-luma",
             "{vendor}/theme-frontend-blank"

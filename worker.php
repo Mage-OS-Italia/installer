@@ -504,6 +504,9 @@ final class Worker
             }
             $this->mage('config:set design/theme/theme_id ' . (int)$id);
             $this->log('Tema attivo: ' . $fe['theme_path'] . '. Luma e Blank non sono installati.');
+            if (!empty($fe['csp'])) {
+                $this->warn('Tema Hyvä in variante CSP: Alpine gira in modalità ridotta, quindi controlla i moduli di compatibilità e il checkout scelti (documentazione su docs.hyva.io, sezione CSP).');
+            }
         }
         if ($fe['checkout'] === 'loki') {
             if ($fe['id'] === 'hyva') {

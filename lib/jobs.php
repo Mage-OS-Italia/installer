@@ -225,6 +225,16 @@ function validate_install(array $in): array
     if (!$fe) {
         $err[] = 'Tema non valido.';
     } else {
+        // Variante CSP del tema (opzionale): cambia pacchetto e tema attivo.
+        $csp = !empty($in['hyva_csp']);
+        if ($csp && empty($fe['csp'])) {
+            $err[] = 'La variante CSP non esiste per il tema scelto.';
+            $csp = false;
+        }
+        if ($csp) {
+            $fe['packages'] = $fe['csp']['packages'];
+            $fe['theme_path'] = $fe['csp']['theme_path'];
+        }
         $co = null;
         foreach ($fe['checkouts'] as $c) {
             if ($c['id'] === $s('checkout')) {
@@ -306,7 +316,7 @@ function validate_install(array $in): array
         'packages' => $packages,
         'repositories' => array_values($repos),
         'credentials' => $credentials,
-        'frontend' => ['id' => $frontendId, 'checkout' => $checkoutId, 'theme_path' => $fe['theme_path'] ?? ''],
+        'frontend' => ['id' => $frontendId, 'checkout' => $checkoutId, 'theme_path' => $fe['theme_path'] ?? '', 'csp' => !empty($csp)],
         'distro_config' => (array)($distro['config'] ?? []),
         'replace' => array_values(array_unique(array_filter(array_merge($replace, (array)($distro[$s('platform') === 'mageos' ? 'replace_mageos' : 'replace'] ?? [])), fn($n) => is_string($n) && preg_match('#^[a-z0-9_.-]+/[a-z0-9_.-]+$#', $n)))),
     ];
