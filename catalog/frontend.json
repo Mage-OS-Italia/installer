@@ -32,9 +32,9 @@
         "id": "hyva",
         "name": "Hyvä",
         "tagline": "Tema veloce basato su Alpine.js e Tailwind CSS",
-        "description": "Tema commerciale: servono la licenza e le chiavi Hyvä. Luma e Blank vengono esclusi dall'installazione per alleggerire la piattaforma.",
+        "description": "Servono la chiave Packagist Hyvä e il nome del progetto, gratuiti con un account su hyva.io. Luma e Blank vengono esclusi dall'installazione per alleggerire la piattaforma.",
         "highlights": [
-            "Richiede una licenza Hyvä",
+            "Chiave Packagist Hyvä gratuita (account su hyva.io)",
             "Luma e Blank non vengono installati"
         ],
         "theme_path": "Hyva/default",
