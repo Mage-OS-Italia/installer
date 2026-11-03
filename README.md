@@ -41,7 +41,7 @@ Metti la cartella in una directory servita dal web server (es. `installer-mage-o
 
 ## Note
 - Magento 2.4.x non supporta MySQL 9.x: nel passo del database c'è l'opzione "Procedi comunque" (solo sviluppo) che aggiunge la versione a `app/etc/di.xml`. Le versioni di database ammesse cambiano da una release (e da una patch) all'altra: il controllo definitivo avviene dopo `composer update`, leggendo i `supportedVersionPatterns` del `di.xml` appena installato, prima di `setup:install` (se non va bene cartella e database creati vengono ripuliti). Il file viene sovrascritto da un successivo `composer update`.
-- Elasticsearch 7 è proposto solo dove il modulo esiste (fino a Magento 2.4.7 e Mage-OS 1.x). OpenSearch con HTTPS (sicurezza di serie dalla 2.12) viene riconosciuto in automatico; il certificato autofirmato è accettato solo se OpenSearch è su `localhost`, altrimenti serve un certificato valido.
+- Elasticsearch 7 è proposto solo dove il modulo esiste (fino a Magento 2.4.7 e Mage-OS 1.x). OpenSearch con HTTPS (sicurezza di serie dalla 2.12) viene riconosciuto in automatico; il certificato autofirmato, e l'HTTP con utente e password, sono accettati solo se OpenSearch è su una rete locale (`localhost`, `127.x`, IP privati `10.x`/`172.16-31.x`/`192.168.x`, nomi senza punti come un servizio Docker); su un host remoto serve un certificato valido.
 - In modalità `production` `composer update` gira con `--no-dev`.
 
 ## Licenza

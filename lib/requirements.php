@@ -316,6 +316,19 @@ function db_connect(string $host, string $user, string $pass, ?string $dbname = 
     return new PDO($dsn, $user, $pass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 5]);
 }
 
+/**
+ * Host raggiungibile solo da una rete locale: localhost, loopback, indirizzi privati (10/8, 172.16/12, 192.168/16,
+ * link-local) o nome senza punti (servizio Docker/Compose, nome di rete interna).
+ */
+function is_local_host(string $host): bool
+{
+    if (preg_match('/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/', $host, $m)) {
+        [$a, $b] = [(int)$m[1], (int)$m[2]];
+        return $a === 127 || $a === 10 || ($a === 172 && $b >= 16 && $b <= 31) || ($a === 192 && $b === 168) || ($a === 169 && $b === 254);
+    }
+    return !str_contains($host, '.');
+}
+
 /** Test del motore di ricerca (OpenSearch / Elasticsearch). Prova http e poi https (OpenSearch 2.12+ ha la sicurezza attiva di serie). */
 function test_search(array $p): array
 {
@@ -329,7 +342,7 @@ function test_search(array $p): array
         $headers[] = 'Authorization: Basic ' . base64_encode($p['user'] . ':' . ($p['password'] ?? ''));
     }
     // Le credenziali viaggiano in chiaro solo verso un host locale; su un host remoto si prova prima HTTPS e l'HTTP parte senza password.
-    $local = $host === 'localhost' || preg_match('/^127(\.\d{1,3}){3}$/', $host) === 1;
+    $local = is_local_host($host);
     // Tentativi in ordine: (schema, credenziali, verifica del certificato). Un certificato autogenerato è la norma su OpenSearch
     // con la sicurezza di default, ma senza verifica le credenziali si inviano solo a un host locale.
     $attempts = $local
