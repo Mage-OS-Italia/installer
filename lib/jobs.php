@@ -129,6 +129,8 @@ function validate_install(array $in): array
             'prefix' => $s('search_prefix') ?: 'magento2', 'user' => $s('search_user'), 'password' => (string)($in['search_password'] ?? '')];
         if (!preg_match('/^[\w.\-]+$/', $search['host']) || $search['port'] < 1 || $search['port'] > 65535) {
             $err[] = 'Host o porta del motore di ricerca non validi.';
+        } elseif ($search['user'] !== '' && !$search['ssl'] && !is_local_host($search['host'])) {
+            $err[] = 'Utente e password del motore di ricerca passerebbero in chiaro su HTTP verso un host non locale: usa HTTPS oppure lascia vuote le credenziali.';
         }
         if (!preg_match('/^[A-Za-z0-9_-]{1,32}$/', $search['prefix'])) {
             $err[] = 'Prefisso indice di ricerca non valido.';

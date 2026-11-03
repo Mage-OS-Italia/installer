@@ -357,6 +357,9 @@ function test_search(array $p): array
             break;
         }
     }
+    if ($r['ok'] && $r['code'] !== 401 && $headers && $scheme === 'http' && !$local) {
+        return ['status' => 'fail', 'message' => 'Il servizio risponde in HTTP senza chiedere autenticazione: le credenziali inserite non sono state inviate, ma l\'installazione le manderebbe in chiaro. Cancellale oppure abilita HTTPS con un certificato valido.'];
+    }
     if ($r['ok'] && $r['code'] === 401 && $headers && $scheme === 'http' && !$local) {
         return ['status' => 'fail', 'message' => 'Il servizio richiede l\'autenticazione ma risponde solo in HTTP: le credenziali non sono state inviate perché passerebbero in chiaro. Abilita HTTPS con un certificato valido.'];
     }
