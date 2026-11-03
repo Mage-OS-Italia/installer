@@ -194,8 +194,7 @@ final class Worker
         file_put_contents($home . '/auth.json', json_encode(['http-basic' => (object)$auth], JSON_UNESCAPED_SLASHES));
         chmod($home . '/auth.json', 0600);
         $this->composerBase = [
-            // default_socket_timeout: un download fermo cade dopo 60 s e composer lo ritenta.
-            'cmd' => escapeshellarg($this->php) . ' -d memory_limit=-1 -d default_socket_timeout=60 ' . escapeshellarg($composer),
+            'cmd' => escapeshellarg($this->php) . ' -d memory_limit=-1 ' . escapeshellarg($composer),
             'env' => [
                 'COMPOSER_HOME' => $home,
                 'COMPOSER_CACHE_DIR' => app_tmp('composer-cache'),

@@ -15,11 +15,8 @@ const PLATFORMS = [
         'regex' => '/^\d+\.\d+\.\d+$/', 'fallback' => '3.6.0', 'fallback_php' => '~8.3.0||~8.4.0||~8.5.0'],
 ];
 
-/**
- * Versioni non proposte perché non si installano: la 4.0.0 di Mage-OS richiede mage-os/module-admin-activity-log 2.0.4,
- * pubblicato solo fino alla 2.0.3. Da togliere quando il pacchetto esce.
- */
-const SKIPPED_VERSIONS = ['mageos' => ['4.0.0']];
+/** Versioni non proposte perché non si installano (piattaforma => versioni). Vuoto: la 4.0.0 di Mage-OS ora si installa. */
+const SKIPPED_VERSIONS = [];
 
 /**
  * Fine del supporto regolare per release Magento (le patch -pN seguono la release), dalla tabella delle release

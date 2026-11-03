@@ -30,6 +30,7 @@ Sono file JSON in `distros/`. Un repository può essere `composer` (default, con
 Metti la cartella in una directory servita dal web server (es. `installer-mage-os.test` con Valet) e aprila nel browser. Serve PHP con `proc_open` abilitato e `ext-curl`, `ext-pdo_mysql`.
 
 - L'accesso richiede sempre il token scritto nel file indicato dalla pagina, anche in locale: un controllo sull'indirizzo di provenienza si aggira dietro un proxy sulla stessa macchina (nginx, Valet, Docker, tunnel).
+- Il file del token sta nella cartella temporanea dell'utente PHP (permessi `0700`): se PHP gira come `www-data` o `_www` serve `sudo` per leggerlo; con `PrivateTmp=true` di systemd (php-fpm su RHEL, apache2 su Debian) il file è in `/tmp/systemd-private-*` e non nel percorso mostrato; con Docker il percorso è quello del container.
 - Usa HTTPS se l'installer è raggiungibile da una rete pubblica: su HTTP il token di accesso, le password del database e le chiavi Composer viaggiano in chiaro. In locale (`.test`, `localhost`) non serve. Meglio ancora: tienilo dietro VPN o limita l'accesso per IP, e rimuovilo a lavoro finito.
 - Le pagine hanno una Content-Security-Policy restrittiva (script solo dal sito stesso, nessuna risorsa esterna, nessun frame): se la modifichi, ricorda che l'interfaccia usa solo `assets/app.js` più due piccoli script con nonce in `index.php`.
 - Job, log e credenziali stanno nella cartella temporanea di sistema (`0700`, di proprietà dell'utente PHP: se è di un altro utente o è un link l'installer si rifiuta di usarla), mai nella document root. Le password di installazione non compaiono nella riga di comando dei processi né nei log.
@@ -40,7 +41,7 @@ Metti la cartella in una directory servita dal web server (es. `installer-mage-o
 
 ## Note
 - Magento 2.4.x non supporta MySQL 9.x: nel passo del database c'è l'opzione "Procedi comunque" (solo sviluppo) che aggiunge la versione a `app/etc/di.xml`. Le versioni di database ammesse cambiano da una release (e da una patch) all'altra: il controllo definitivo avviene dopo `composer update`, leggendo i `supportedVersionPatterns` del `di.xml` appena installato, prima di `setup:install` (se non va bene cartella e database creati vengono ripuliti). Il file viene sovrascritto da un successivo `composer update`.
-- Elasticsearch 7 è proposto solo dove il modulo esiste (fino a Magento 2.4.7 e Mage-OS 1.x). OpenSearch con HTTPS (sicurezza di serie dalla 2.12) viene riconosciuto in automatico, anche con certificato autofirmato.
+- Elasticsearch 7 è proposto solo dove il modulo esiste (fino a Magento 2.4.7 e Mage-OS 1.x). OpenSearch con HTTPS (sicurezza di serie dalla 2.12) viene riconosciuto in automatico; il certificato autofirmato è accettato solo se OpenSearch è su `localhost`, altrimenti serve un certificato valido.
 - In modalità `production` `composer update` gira con `--no-dev`.
 
 ## Licenza

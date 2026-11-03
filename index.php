@@ -178,7 +178,7 @@ $asset = fn(string $f): string => 'assets/' . $f . '?v=' . filemtime(__DIR__ . '
 </head>
 <body>
 <div class="bg-glow" aria-hidden="true"></div>
-<?php if ($locked): ?>
+<?php if ($locked && $authorized): ?>
 <main class="gate">
   <div class="card gate-card">
     <img src="assets/logo.svg" alt="Magento Installer">

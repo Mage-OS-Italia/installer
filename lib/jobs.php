@@ -411,6 +411,12 @@ function pid_alive(int $pid): bool
         @exec('kill -0 ' . $pid . ' 2>/dev/null', $o, $rc);
         return $rc === 0;
     }
+    if (function_exists('proc_open')) {
+        $p = @proc_open(['kill', '-0', (string)$pid], [1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes);
+        if (is_resource($p)) {
+            return proc_close($p) === 0;
+        }
+    }
     return true; // non si può sapere: meglio non dichiarare morto un worker vivo
 }
 
