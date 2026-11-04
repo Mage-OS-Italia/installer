@@ -655,7 +655,7 @@
       if (r.error) {
         j.fails = (j.fails || 0) + 1;
         if (j.fails >= 4 && lead) {
-          lead.textContent = (r._status === 403 ? 'Sessione scaduta: ricarica la pagina (e inserisci il token se richiesto). ' : 'Non riesco a raggiungere il server: ' + r.error + ' ')
+          lead.textContent = (r._status === 403 ? 'Sessione scaduta: ricarica la pagina. ' : 'Non riesco a raggiungere il server: ' + r.error + ' ')
             + "L'installazione prosegue in background.";
         }
         return;

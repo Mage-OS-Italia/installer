@@ -29,9 +29,8 @@ Sono file JSON in `distros/`. Un repository può essere `composer` (default, con
 ## Uso
 Metti la cartella in una directory servita dal web server (es. `installer-mage-os.test` con Valet) e aprila nel browser. Serve PHP con `proc_open` abilitato e `ext-curl`, `ext-pdo_mysql`.
 
-- L'accesso richiede sempre il token scritto nel file indicato dalla pagina, anche in locale: un controllo sull'indirizzo di provenienza si aggira dietro un proxy sulla stessa macchina (nginx, Valet, Docker, tunnel).
-- Il file del token sta nella cartella temporanea dell'utente PHP (permessi `0700`): se PHP gira come `www-data` o `_www` serve `sudo` per leggerlo; con `PrivateTmp=true` di systemd (php-fpm su RHEL, apache2 su Debian) il file è in `/tmp/systemd-private-*` e non nel percorso mostrato; con Docker il percorso è quello del container.
-- Usa HTTPS se l'installer è raggiungibile da una rete pubblica: su HTTP il token di accesso, le password del database e le chiavi Composer viaggiano in chiaro. In locale (`.test`, `localhost`) non serve. Meglio ancora: tienilo dietro VPN o limita l'accesso per IP, e rimuovilo a lavoro finito.
+- Nessun token di accesso: chiunque raggiunga l'URL può usare l'installer. Tienilo solo in locale o dietro VPN/limite per IP, e rimuovilo a lavoro finito.
+- Usa HTTPS se l'installer è raggiungibile da una rete pubblica: su HTTP le password del database e le chiavi Composer viaggiano in chiaro. In locale (`.test`, `localhost`) non serve. Meglio ancora: tienilo dietro VPN o limita l'accesso per IP, e rimuovilo a lavoro finito.
 - Le pagine hanno una Content-Security-Policy restrittiva (script solo dal sito stesso, nessuna risorsa esterna, nessun frame): se la modifichi, ricorda che l'interfaccia usa solo `assets/app.js` più due piccoli script con nonce in `index.php`.
 - Job, log e credenziali stanno nella cartella temporanea di sistema (`0700`, di proprietà dell'utente PHP: se è di un altro utente o è un link l'installer si rifiuta di usarla), mai nella document root. Le password di installazione non compaiono nella riga di comando dei processi né nei log.
 - Il processo PHP deve poter scrivere nella cartella dell'installer (serve per il blocco finale e per la rimozione): se non può, l'installazione non parte.

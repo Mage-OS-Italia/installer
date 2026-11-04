@@ -31,51 +31,9 @@ header('Referrer-Policy: no-referrer');
 $nonce = base64_encode(random_bytes(16));
 header("Content-Security-Policy: default-src 'none'; script-src 'self' 'nonce-$nonce'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
 
-function token_file(): string
-{
-    return app_tmp() . '/access-token';
-}
-
-/** Il token di accesso; '' se non si riesce a scriverlo (in quel caso nessuno può entrare con il token). */
-function access_token(): string
-{
-    $f = token_file();
-    $token = is_file($f) ? trim((string)@file_get_contents($f)) : '';
-    if ($token === '') {
-        // Scrittura su un file temporaneo e rename: chi legge non vede mai un token a metà, e un file vuoto o troncato si rigenera.
-        $token = bin2hex(random_bytes(12));
-        $tmp = $f . '.' . bin2hex(random_bytes(4));
-        $old = umask(0077);
-        $ok = @file_put_contents($tmp, $token) === strlen($token) && @rename($tmp, $f);
-        umask($old);
-        if (!$ok) {
-            @unlink($tmp);
-            return '';
-        }
-        $token = trim((string)@file_get_contents($f));
-    }
-    return $token;
-}
-
-$authorized = !empty($_SESSION['authorized']);
+$authorized = true; // nessun token: l'accesso è libero
 $locked = is_file(__DIR__ . '/.installed');
 $action = (string)($_GET['a'] ?? '');
-
-// ---- Sblocco con token (accesso da rete pubblica)
-if ($action === 'auth' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-    $given = trim((string)(request_json()['token'] ?? ''));
-    $token = access_token();
-    if ($token === '') {
-        json_out(['ok' => false, 'error' => 'Impossibile creare il token di accesso in ' . token_file() . ': controlla i permessi.'], 500);
-    }
-    if ($given !== '' && hash_equals($token, $given)) {
-        session_regenerate_id(true);
-        $_SESSION['authorized'] = true;
-        json_out(['ok' => true]);
-    }
-    usleep(500000);
-    json_out(['ok' => false, 'error' => 'Token errato.'], 403);
-}
 
 // ---- API
 if ($action !== '') {
@@ -196,27 +154,6 @@ document.getElementById('remove-btn').onclick = async () => {
   const msg = d.ok ? '<h1>Installer rimosso</h1><p>Puoi chiudere questa pagina.</p>'
     : '<h1>Rimozione non riuscita</h1><p>' + (d.error ? String(d.error).replace(/[<>&]/g, '') : 'Non sono riuscito a eliminare: ' + (d.failed || []).map((f) => f.replace(/[<>&]/g, '')).join(', ') + '. Cancellali a mano dal server.') + (d.locked ? ' L\'installer resta bloccato.' : '') + '</p>';
   document.body.innerHTML = '<main class="gate"><div class="card gate-card">' + msg + '</div></main>';
-};
-</script>
-<?php elseif (!$authorized): access_token(); // il file deve esistere già quando la pagina ne indica il percorso ?>
-<main class="gate">
-  <div class="card gate-card">
-    <img src="assets/logo.svg" alt="Magento Installer">
-    <h1>Accesso protetto</h1>
-    <p>Per continuare inserisci il token di accesso.</p>
-    <p class="muted">Lo trovi sul server nel file:<br><code><?= h(token_file()) ?></code></p>
-    <form id="auth-form">
-      <input type="password" id="token" placeholder="Token di accesso" autocomplete="off" autofocus>
-      <button class="btn primary" type="submit">Entra</button>
-      <p class="err" id="auth-err"></p>
-    </form>
-  </div>
-</main>
-<script nonce="<?= h($nonce) ?>">
-document.getElementById('auth-form').onsubmit = async (e) => {
-  e.preventDefault();
-  const r = await fetch('?a=auth', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({token: document.getElementById('token').value})});
-  if (r.ok) location.reload(); else document.getElementById('auth-err').textContent = (await r.json().catch(() => ({}))).error || 'Token errato.';
 };
 </script>
 <?php else: ?>
