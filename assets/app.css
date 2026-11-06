@@ -88,6 +88,16 @@ input[type=text], input[type=password], input[type=email], input[type=number], s
 textarea { width: 100%; padding: 11px 13px; border-radius: 11px; border: 1px solid var(--line); background: rgba(8, 9, 30, .55); color: var(--text); font: 13px/1.5 ui-monospace, Menlo, monospace; outline: none; resize: vertical; }
 textarea:focus { border-color: var(--orange-2); box-shadow: 0 0 0 3px rgba(255, 106, 26, .22); }
 select option { background: #14163d; }
+select {
+  -webkit-appearance: none; appearance: none; cursor: pointer; padding-right: 40px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239ea3cf' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 14px center; background-size: 14px;
+}
+select:hover { border-color: rgba(255, 255, 255, .24); }
+select:focus {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23ff8a3d' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+}
+select option { color: var(--text); }
 input:focus, select:focus { border-color: var(--orange-2); box-shadow: 0 0 0 3px rgba(255, 106, 26, .22); }
 input.bad { border-color: var(--fail); }
 .input-row { display: flex; gap: 8px; }
