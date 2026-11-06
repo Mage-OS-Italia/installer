@@ -466,7 +466,8 @@
       </div>
       <div style="margin-top:14px"><button class="btn small" data-act="test-search">Testa connessione alla ricerca</button></div>
       ${testBoxHtml(S.search, 'search-test')}`}
-      ${actions(true, true, 'Avanti →', !step2Ok())}`;
+      <p class="muted" style="font-size:13px;margin:18px 0 0">Premendo <b>Avanti</b> la connessione a database${useMysql() ? '' : ' e motore di ricerca'} viene verificata in automatico: il test manuale serve solo se vuoi controllare prima.</p>
+      ${actions(true, true, 'Avanti →')}`;
   }
   function unsupportedBox() {
     if (!S.db?.unsupported) return '';
@@ -737,7 +738,6 @@
   function updateNext() {
     const btn = $('[data-nav=next]');
     if (!btn) return;
-    if (S.step === 2) btn.disabled = !step2Ok();
   }
 
   const EYE = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
@@ -843,6 +843,21 @@
         if (!(S.f.products >= 1)) { alert('Indica quanti prodotti prevedi di avere a catalogo.'); return; }
         if (!hyvaOk()) { alert("Incolla le chiavi Hyvä copiate dall'area licenze di hyva.io."); return; }
         S.req = null;
+      }
+      if (S.step === 2) {
+        // Il test di connessione parte da solo se non è già stato fatto con questi dati.
+        const label = nav.textContent;
+        nav.disabled = true;
+        nav.textContent = 'Verifica in corso…';
+        if (!S.db) await testDb();
+        if (!useMysql() && !S.search) await testSearch(false);
+        nav.disabled = false;
+        nav.textContent = label;
+        if (!step2Ok()) {
+          const bad = $('#db-test.fail, #db-test.warn, #unsupported-box:not(:empty)') || $('#search-test');
+          if (bad) bad.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
       }
       if (S.step === 3) {
         S.errors = validateStep3();
