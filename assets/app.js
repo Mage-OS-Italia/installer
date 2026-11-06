@@ -623,7 +623,7 @@
       tot += w;
       got += w * (s.state === 'ok' ? 1 : s.state === 'running' ? (s.progress ?? 0.15) : 0);
     }
-    const pct = j.state === 'done' ? 100 : Math.min(99, Math.round(tot ? (got / tot) * 100 : 0));
+    const pct = (j.state === 'done' || j.state === 'demo') ? 100 : Math.min(99, Math.round(tot ? (got / tot) * 100 : 0));
     $('#job-bar').style.width = pct + '%';
     $('#job-pct').textContent = pct + '%';
   }
@@ -687,6 +687,7 @@
     const act = $('#job-actions');
     if (j.state === 'demo') {
       $('#job-lead').textContent = 'Demo conclusa';
+      const h = $('#panel h2'); if (h) h.textContent = 'Simulazione completata';
       out.innerHTML = `
         <div class="success"><div class="big">🙏</div><h2 style="margin:0 0 4px">Grazie per aver provato la demo!</h2><p class="muted">In questo ambiente l'installazione non viene completata: non è stato creato nessun file, database o negozio.</p></div>`;
       act.innerHTML = `<span></span><div class="right"><button class="btn primary" data-act="restart-demo">↻ Riprova la demo</button></div>`;
