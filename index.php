@@ -5,6 +5,7 @@ require __DIR__ . '/lib/bootstrap.php';
 require __DIR__ . '/lib/catalog.php';
 require __DIR__ . '/lib/requirements.php';
 require __DIR__ . '/lib/jobs.php';
+require __DIR__ . '/lib/demo.php';
 
 // Errori dell'ambiente (cartella temporanea non sicura, permessi): un messaggio leggibile invece di una pagina bianca.
 set_exception_handler(function (Throwable $e): void {
@@ -32,7 +33,7 @@ $nonce = base64_encode(random_bytes(16));
 header("Content-Security-Policy: default-src 'none'; script-src 'self' 'nonce-$nonce'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
 
 $authorized = true; // nessun token: l'accesso è libero
-$locked = is_file(__DIR__ . '/.installed');
+$locked = false; // demo: l'installer non si blocca mai
 $action = (string)($_GET['a'] ?? '');
 
 // ---- API
@@ -63,8 +64,9 @@ if ($action !== '') {
                 'frontends' => array_values(frontends()),
                 'mysql_search' => mysql_search(),
                 'locale' => locale_options(),
-                'server' => server_info(),
+                'server' => DEMO_SERVER,
                 'app' => ['name' => APP_NAME, 'version' => APP_VERSION],
+                'demo' => demo_defaults(),
             ]);
         case 'requirements':
             if (!$post) {
@@ -85,35 +87,20 @@ if ($action !== '') {
                     }
                 }
             }
-            json_out(run_requirements(['platform' => $in['platform'] ?? '', 'version' => $in['version'] ?? '', 'target' => $in['target'] ?? '', 'repos' => array_values($repos)]));
+            json_out(demo_requirements(['platform' => $in['platform'] ?? '', 'version' => $in['version'] ?? '', 'target' => $in['target'] ?? '', 'repos' => array_values($repos)]));
         case 'test_db':
-            json_out(test_db($in));
+            json_out(demo_test_db($in));
         case 'test_search':
-            json_out(test_search($in));
+            json_out(demo_test_search($in));
         case 'start':
-            [$config, $errors] = validate_install($in);
-            if ($errors) {
-                json_out(['error' => 'Controlla i dati inseriti.', 'errors' => $errors], 422);
-            }
-            $r = start_install($config);
-            json_out($r, isset($r['error']) ? 500 : 200);
+            json_out(demo_start($in)); // demo: nessuna validazione sul server, nessun job reale
         case 'status':
-            json_out(job_status((string)($_GET['job'] ?? ''), max(0, (int)($_GET['since'] ?? 0))));
+            json_out(demo_status((string)($_GET['job'] ?? ''), max(0, (int)($_GET['since'] ?? 0))));
         case 'cancel':
-            $id = (string)($in['job'] ?? '');
-            if (valid_job_id($id) && is_dir(job_dir($id))) {
-                touch(job_dir($id) . '/cancel');
-            }
+            unset($_SESSION['demo_job']);
             json_out(['ok' => true]);
         case 'remove':
-            if (!$post) {
-                json_out(['error' => 'Operazione non consentita.'], 400);
-            }
-            if (running_job() !== null) {
-                json_out(['ok' => false, 'error' => 'Un\'installazione è in corso: attendi che finisca o annullala prima di rimuovere l\'installer.', 'failed' => [], 'left' => []], 409);
-            }
-            $r = remove_installer();
-            json_out($r, $r['ok'] ? 200 : 500);
+            json_out(['ok' => false, 'error' => 'Nella demo non c\'è nulla da rimuovere.', 'failed' => [], 'left' => []], 403);
         default:
             json_out(['error' => 'Azione sconosciuta.'], 404);
     }

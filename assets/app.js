@@ -161,6 +161,9 @@
     };
     applyDistroDefaults();
     syncDerived();
+    // Demo: dati di esempio già compilati, che il resto dell'interfaccia non deve sovrascrivere.
+    Object.assign(S.f, b.demo || {});
+    for (const k of ['target', 'base_url', 'db_name', 'store_name']) S.touched[k] = true;
     const saved = loadJob();
     if (saved && /^[a-f0-9]{16}$/.test(saved.id || '')) {
       const st = await api('status', undefined, `&job=${saved.id}&since=0`);
@@ -188,7 +191,7 @@
         </ol>
         <div class="info card" id="side-info"></div>
       </aside>
-      <main class="main"><div class="card" id="panel"></div></main>`;
+      <main class="main"><div class="demo-banner"><b>Demo</b> · Stai provando l'installer: i dati sono di esempio, nessun controllo è reale e alla fine non viene installato nulla.</div><div class="card" id="panel"></div></main>`;
     renderSide();
     renderStep();
   }
@@ -667,7 +670,7 @@
       j.steps = r.status.steps || [];
       j.status = r.status;
       drawTasks();
-      if (['done', 'failed', 'cancelled'].includes(r.status.state)) {
+      if (['done', 'demo', 'failed', 'cancelled'].includes(r.status.state)) {
         j.state = r.status.state;
         clearInterval(j.timer); j.timer = null;
         drawTasks();
@@ -682,7 +685,14 @@
     if (!out || out.dataset.done) return;
     out.dataset.done = '1';
     const act = $('#job-actions');
-    if (j.state === 'done') {
+    if (j.state === 'demo') {
+      $('#job-lead').textContent = 'Demo conclusa';
+      out.innerHTML = `
+        <div class="success"><div class="big">🙏</div><h2 style="margin:0 0 4px">Grazie per aver provato la demo!</h2><p class="muted">In questo ambiente l'installazione non viene completata: non è stato creato nessun file, database o negozio.</p></div>`;
+      act.innerHTML = `<span></span><div class="right"><button class="btn primary" data-act="restart-demo">↻ Riprova la demo</button></div>`;
+      $('#job-log-wrap').open = false;
+      saveJob(null);
+    } else if (j.state === 'done') {
       const r = st.result;
       $('#job-lead').textContent = 'Fatto!';
       out.innerHTML = `
@@ -845,6 +855,7 @@
     if (!act) return;
     switch (act.dataset.act) {
       case 'recheck': S.req = null; runRequirements(); break;
+      case 'restart-demo': saveJob(null); location.reload(); break;
       case 'test-db': testDb(); break;
       case 'test-search': S.touched.search_engine = true; testSearch(false); break;
       case 'gen-pw': { S.f.admin_password = genPassword(); const i = $('[data-k=admin_password]'); i.value = S.f.admin_password; setPwVisible(i, true); break; }
