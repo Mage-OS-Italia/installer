@@ -39,14 +39,14 @@ $action = (string)($_GET['a'] ?? '');
 // ---- API
 if ($action !== '') {
     if (!$authorized) {
-        json_out(['error' => 'Accesso negato.'], 403);
+        json_out(['error' => t('Accesso negato.')], 403);
     }
     $post = $_SERVER['REQUEST_METHOD'] === 'POST';
     if ($post && !hash_equals($_SESSION['csrf'], (string)($_SERVER['HTTP_X_CSRF'] ?? ''))) {
-        json_out(['error' => 'Sessione scaduta: ricarica la pagina.'], 403);
+        json_out(['error' => t('Sessione scaduta: ricarica la pagina.')], 403);
     }
     if ($locked && $action !== 'remove' && $action !== 'status') {
-        json_out(['error' => 'Installer bloccato: Magento risulta già installato.'], 423);
+        json_out(['error' => t('Installer bloccato: Magento risulta già installato.')], 423);
     }
     $in = $post ? request_json() : [];
 
@@ -70,7 +70,7 @@ if ($action !== '') {
             ]);
         case 'requirements':
             if (!$post) {
-                json_out(['error' => 'Metodo non valido.'], 405);
+                json_out(['error' => t('Metodo non valido.')], 405);
             }
             $repos = [];
             $d = distros()[$in['distro'] ?? ''] ?? null;
@@ -100,9 +100,9 @@ if ($action !== '') {
             unset($_SESSION['demo_job']);
             json_out(['ok' => true]);
         case 'remove':
-            json_out(['ok' => false, 'error' => 'Nella demo non c\'è nulla da rimuovere.', 'failed' => [], 'left' => []], 403);
+            json_out(['ok' => false, 'error' => t('Nella demo non c\'è nulla da rimuovere.'), 'failed' => [], 'left' => []], 403);
         default:
-            json_out(['error' => 'Azione sconosciuta.'], 404);
+            json_out(['error' => t('Azione sconosciuta.')], 404);
     }
 }
 
@@ -112,7 +112,7 @@ header('Cache-Control: no-store');
 $asset = fn(string $f): string => 'assets/' . $f . '?v=' . filemtime(__DIR__ . '/assets/' . $f);
 ?>
 <!doctype html>
-<html lang="it">
+<html lang="<?= h(current_lang()) ?>">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -127,19 +127,21 @@ $asset = fn(string $f): string => 'assets/' . $f . '?v=' . filemtime(__DIR__ . '
 <main class="gate">
   <div class="card gate-card">
     <img src="assets/logo.svg" alt="Magento Installer">
-    <h1>Installer bloccato</h1>
-    <p>Magento è già stato installato con questo installer. Per sicurezza non può essere rieseguito.</p>
-    <p class="muted">Per ripartire elimina il file <code>.installed</code> nella cartella dell'installer, oppure rimuovi l'installer.</p>
-    <button class="btn danger" id="remove-btn">Rimuovi installer</button>
+    <h1><?= h(t('Installer bloccato')) ?></h1>
+    <p><?= h(t('Magento è già stato installato con questo installer. Per sicurezza non può essere rieseguito.')) ?></p>
+    <p class="muted"><?= t('Per ripartire elimina il file {f} nella cartella dell\'installer, oppure rimuovi l\'installer.', ['f' => '<code>.installed</code>']) ?></p>
+    <button class="btn danger" id="remove-btn"><?= h(t('Rimuovi installer')) ?></button>
   </div>
 </main>
 <script nonce="<?= h($nonce) ?>">
 document.getElementById('remove-btn').onclick = async () => {
-  if (!confirm("Eliminare definitivamente l'installer dal server?")) return;
+  const T = <?= json_encode(['confirm' => t("Eliminare definitivamente l'installer dal server?"), 'removed' => t('Installer rimosso'), 'close' => t('Puoi chiudere questa pagina.'),
+    'failed' => t('Rimozione non riuscita'), 'cantDelete' => t('Non sono riuscito a eliminare: {files}. Cancellali a mano dal server.'), 'stillLocked' => t("L'installer resta bloccato.")], JSON_UNESCAPED_UNICODE) ?>;
+  if (!confirm(T.confirm)) return;
   const r = await fetch('?a=remove', {method:'POST', headers:{'X-CSRF': <?= json_encode($_SESSION['csrf']) ?>, 'Content-Type':'application/json'}, body:'{}'});
   const d = await r.json().catch(() => ({}));
-  const msg = d.ok ? '<h1>Installer rimosso</h1><p>Puoi chiudere questa pagina.</p>'
-    : '<h1>Rimozione non riuscita</h1><p>' + (d.error ? String(d.error).replace(/[<>&]/g, '') : 'Non sono riuscito a eliminare: ' + (d.failed || []).map((f) => f.replace(/[<>&]/g, '')).join(', ') + '. Cancellali a mano dal server.') + (d.locked ? ' L\'installer resta bloccato.' : '') + '</p>';
+  const msg = d.ok ? '<h1>' + T.removed + '</h1><p>' + T.close + '</p>'
+    : '<h1>' + T.failed + '</h1><p>' + (d.error ? String(d.error).replace(/[<>&]/g, '') : T.cantDelete.replace('{files}', (d.failed || []).map((f) => f.replace(/[<>&]/g, '')).join(', '))) + (d.locked ? ' ' + T.stillLocked : '') + '</p>';
   document.body.innerHTML = '<main class="gate"><div class="card gate-card">' + msg + '</div></main>';
 };
 </script>
@@ -147,6 +149,7 @@ document.getElementById('remove-btn').onclick = async () => {
 <div id="app" class="app" data-csrf="<?= h($_SESSION['csrf']) ?>">
   <div class="boot"><div class="spinner"></div><p>Caricamento…</p></div>
 </div>
+<script src="<?= h($asset('lang-en.js')) ?>" nonce="<?= h($nonce) ?>"></script>
 <script src="<?= h($asset('app.js')) ?>" nonce="<?= h($nonce) ?>"></script>
 <?php endif; ?>
 </body>

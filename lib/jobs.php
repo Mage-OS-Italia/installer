@@ -23,97 +23,98 @@ function validate_install(array $in): array
 
     $platform = platform_of($s('platform'));
     if (!$platform) {
-        $err[] = 'Piattaforma non valida.';
+        $err[] = t('Piattaforma non valida.');
     }
     $version = $platform ? find_version($s('platform'), $s('version')) : null;
     if (!$version) {
-        $err[] = 'Versione non valida.';
+        $err[] = t('Versione non valida.');
     }
     if ($version && ($version['php'] ?? '') !== '') {
         $cli = php_cli_info();
         if (!$cli) {
-            $err[] = 'PHP da riga di comando non trovato: servono composer e bin/magento.';
+            $err[] = t('PHP da riga di comando non trovato: servono composer e bin/magento.');
         } elseif (!php_satisfies($cli['version'], $version['php'])) {
-            $err[] = 'Il PHP da riga di comando (' . $cli['version'] . ') non è supportato da ' . $platform['name'] . ' ' . $version['version']
-                . ' (richiede ' . preg_replace('/~?(\d+\.\d+)\.0/', '$1.x', str_replace('||', ' · ', $version['php'])) . '). Scegli una versione più recente o un altro PHP.';
+            $err[] = t('Il PHP da riga di comando ({c}) non è supportato da {p} {v} (richiede {r}). Scegli una versione più recente o un altro PHP.', [
+                'c' => $cli['version'], 'p' => $platform['name'], 'v' => $version['version'],
+                'r' => preg_replace('/~?(\d+\.\d+)\.0/', '$1.x', str_replace('||', ' · ', $version['php']))]);
         }
     }
     $distros = distros();
     $distro = $distros[$s('distro')] ?? null;
     if (!$distro) {
-        $err[] = 'Distro non valida.';
+        $err[] = t('Distro non valida.');
     }
     // Senza multi-magazzino MSI si esclude; la distro Light lo esclude sempre.
     $noMsi = ($distro['msi'] ?? true) === false || empty($in['multi_stock']);
 
     $target = rtrim($s('target'), '/');
     if ($target === '' || $target[0] !== '/' || str_contains($target, '..') || preg_match('/[\0\n\r]/', $target)) {
-        $err[] = 'La cartella di destinazione deve essere un percorso assoluto.';
+        $err[] = t('La cartella di destinazione deve essere un percorso assoluto.');
     } else {
         // Confronti su percorsi risolti (link, `//`, maiuscole su macOS), non sulle stringhe digitate.
         $target = normalize_path($target);
         $installer = normalize_path(APP_ROOT);
         if ($target === '/' || path_key($target) === path_key(normalize_path(home_dir())) || path_within($installer, $target)) {
-            $err[] = 'La cartella di destinazione non può contenere l\'installer.';
+            $err[] = t('La cartella di destinazione non può contenere l\'installer.');
         } elseif (path_within($target, $installer)) {
-            $err[] = 'La cartella di destinazione non può stare dentro quella dell\'installer (verrebbe cancellata con lui).';
+            $err[] = t('La cartella di destinazione non può stare dentro quella dell\'installer (verrebbe cancellata con lui).');
         } elseif (is_dir($target) && count(array_diff(scandir($target) ?: [], ['.', '..'])) > 0) {
-            $err[] = 'La cartella di destinazione non è vuota.';
+            $err[] = t('La cartella di destinazione non è vuota.');
         } else {
             $parent = is_dir($target) ? $target : dirname($target);
             while ($parent !== '/' && !is_dir($parent)) {
                 $parent = dirname($parent);
             }
             if (!is_writable($parent)) {
-                $err[] = "Il processo PHP non può scrivere in $parent: scegli un'altra cartella o correggi i permessi.";
+                $err[] = t("Il processo PHP non può scrivere in {p}: scegli un'altra cartella o correggi i permessi.", ['p' => $parent]);
             }
         }
     }
 
     $baseUrl = $s('base_url');
     if (!filter_var($baseUrl, FILTER_VALIDATE_URL) || !preg_match('#^https?://#i', $baseUrl)) {
-        $err[] = 'Base URL non valido (es. http://mio-negozio.test/).';
+        $err[] = t('Base URL non valido (es. http://mio-negozio.test/).');
     }
     $baseUrl = rtrim($baseUrl, '/') . '/';
 
     $front = $s('backend_frontname') ?: 'admin';
     if (!preg_match('/^[A-Za-z0-9_-]{2,}$/', $front)) {
-        $err[] = 'Il percorso admin può contenere solo lettere, numeri, - e _.';
+        $err[] = t('Il percorso admin può contenere solo lettere, numeri, - e _.');
     }
 
     $loc = locale_options();
     $lang = $s('language');
     if (!isset($loc['languages'][$lang])) {
-        $err[] = 'Lingua non valida.';
+        $err[] = t('Lingua non valida.');
     }
     $cur = $s('currency');
     if (!isset($loc['currencies'][$cur])) {
-        $err[] = 'Valuta non valida.';
+        $err[] = t('Valuta non valida.');
     }
     $tz = $s('timezone');
     if (!in_array($tz, $loc['timezones'], true)) {
-        $err[] = 'Fuso orario non valido.';
+        $err[] = t('Fuso orario non valido.');
     }
 
     $db = ['host' => $s('db_host'), 'name' => $s('db_name'), 'user' => $s('db_user'), 'password' => (string)($in['db_password'] ?? ''), 'prefix' => $s('db_prefix')];
     if (!preg_match('#^[\w.\-:/]+$#', $db['host'])) {
-        $err[] = 'Host del database non valido.';
+        $err[] = t('Host del database non valido.');
     }
     if (!preg_match('/^[A-Za-z0-9_$]{1,64}$/', $db['name'])) {
-        $err[] = 'Nome database non valido (lettere, numeri, _ e $).';
+        $err[] = t('Nome database non valido (lettere, numeri, _ e $).');
     }
     if ($db['user'] === '') {
-        $err[] = 'Utente database mancante.';
+        $err[] = t('Utente database mancante.');
     }
     if ($db['prefix'] !== '' && !preg_match('/^[A-Za-z0-9_]{1,16}$/', $db['prefix'])) {
-        $err[] = 'Prefisso tabelle non valido.';
+        $err[] = t('Prefisso tabelle non valido.');
     }
 
     // Catalogo piccolo: ricerca MySQL, senza OpenSearch (salvo richiesta esplicita di usarlo).
     $ms = mysql_search();
     $products = (int)($in['products'] ?? 0);
     if ($products < 1) {
-        $err[] = 'Indica quanti prodotti prevedi di avere a catalogo.';
+        $err[] = t('Indica quanti prodotti prevedi di avere a catalogo.');
     }
     $useMysql = $products >= 1 && $products <= (int)$ms['max_products'] && empty($in['use_opensearch']);
     if ($useMysql) {
@@ -121,40 +122,40 @@ function validate_install(array $in): array
     } else {
         $engine = $s('search_engine');
         if (!in_array($engine, ['opensearch', 'elasticsearch8', 'elasticsearch7'], true)) {
-            $err[] = 'Motore di ricerca non valido.';
+            $err[] = t('Motore di ricerca non valido.');
         } elseif ($engine === 'elasticsearch7' && $version && !es7_supported($s('platform'), $version['version'])) {
-            $err[] = 'Elasticsearch 7 non è supportato da ' . $platform['name'] . ' ' . $version['version'] . ': usa OpenSearch o Elasticsearch 8.';
+            $err[] = t('Elasticsearch 7 non è supportato da {p} {v}: usa OpenSearch o Elasticsearch 8.', ['p' => $platform['name'], 'v' => $version['version']]);
         }
         $search = ['engine' => $engine, 'ssl' => !empty($in['search_ssl']), 'host' => $s('search_host'), 'port' => (int)($in['search_port'] ?? 9200),
             'prefix' => $s('search_prefix') ?: 'magento2', 'user' => $s('search_user'), 'password' => (string)($in['search_password'] ?? '')];
         if (!preg_match('/^[\w.\-]+$/', $search['host']) || $search['port'] < 1 || $search['port'] > 65535) {
-            $err[] = 'Host o porta del motore di ricerca non validi.';
+            $err[] = t('Host o porta del motore di ricerca non validi.');
         } elseif ($search['user'] !== '' && !$search['ssl'] && !is_local_host($search['host'])) {
-            $err[] = 'Utente e password del motore di ricerca passerebbero in chiaro su HTTP verso un host non locale: usa HTTPS oppure lascia vuote le credenziali.';
+            $err[] = t('Utente e password del motore di ricerca passerebbero in chiaro su HTTP verso un host non locale: usa HTTPS oppure lascia vuote le credenziali.');
         }
         if (!preg_match('/^[A-Za-z0-9_-]{1,32}$/', $search['prefix'])) {
-            $err[] = 'Prefisso indice di ricerca non valido.';
+            $err[] = t('Prefisso indice di ricerca non valido.');
         }
     }
 
     $admin = ['firstname' => $s('admin_firstname'), 'lastname' => $s('admin_lastname'), 'email' => $s('admin_email'),
         'user' => $s('admin_user'), 'password' => (string)($in['admin_password'] ?? '')];
     if ($admin['firstname'] === '' || $admin['lastname'] === '') {
-        $err[] = 'Nome e cognome dell\'amministratore sono obbligatori.';
+        $err[] = t('Nome e cognome dell\'amministratore sono obbligatori.');
     }
     if (!filter_var($admin['email'], FILTER_VALIDATE_EMAIL)) {
-        $err[] = 'Email amministratore non valida.';
+        $err[] = t('Email amministratore non valida.');
     }
     if (!preg_match('/^[A-Za-z0-9_.@-]{3,40}$/', $admin['user'])) {
-        $err[] = 'Username amministratore non valido (almeno 3 caratteri: lettere, numeri, . _ - @).';
+        $err[] = t('Username amministratore non valido (almeno 3 caratteri: lettere, numeri, . _ - @).');
     }
     if (strlen($admin['password']) < 7 || !preg_match('/[A-Za-z]/', $admin['password']) || !preg_match('/\d/', $admin['password'])) {
-        $err[] = 'La password admin deve avere almeno 7 caratteri, con lettere e numeri.';
+        $err[] = t('La password admin deve avere almeno 7 caratteri, con lettere e numeri.');
     }
 
     $mode = $s('deploy_mode') ?: 'developer';
     if (!in_array($mode, ['developer', 'production'], true)) {
-        $err[] = 'Modalità di deploy non valida.';
+        $err[] = t('Modalità di deploy non valida.');
     }
 
     // Pacchetti: solo quelli definiti dalla distro o nel catalogo dei moduli Mage-OS.
@@ -178,7 +179,7 @@ function validate_install(array $in): array
         $known = array_column(mageos_modules(), 'name');
         foreach (array_keys($mageos) as $n) {
             if (!in_array((string)$n, $known, true)) {
-                $err[] = 'Modulo Mage-OS sconosciuto: ' . $n . '.';
+                $err[] = t('Modulo Mage-OS sconosciuto: {n}.', ['n' => $n]);
             }
         }
         foreach (mageos_modules() as $m) {
@@ -186,25 +187,25 @@ function validate_install(array $in): array
                 continue;
             }
             if (in_array($distro['id'], (array)($m['incompatible_with'] ?? []), true)) {
-                $err[] = $m['label'] . ' non è compatibile con la distro ' . $distro['name'] . '.';
+                $err[] = t('{m} non è compatibile con la distro {d}.', ['m' => $m['label'], 'd' => $distro['name']]);
                 continue;
             }
             if ($noMsi && !empty($m['needs_msi'])) {
-                $err[] = $m['label'] . (($distro['msi'] ?? true) === false
-                    ? ' richiede MSI: non è compatibile con la distro ' . $distro['name'] . '.'
-                    : ' richiede MSI: attiva «Uso più magazzini (MSI)» o deseleziona il modulo.');
+                $err[] = ($distro['msi'] ?? true) === false
+                    ? t('{m} richiede MSI: non è compatibile con la distro {d}.', ['m' => $m['label'], 'd' => $distro['name']])
+                    : t('{m} richiede MSI: attiva «Uso più magazzini (MSI)» o deseleziona il modulo.', ['m' => $m['label']]);
                 continue;
             }
             if ($useMysql && !empty($m['needs_opensearch'])) {
-                $err[] = $m['label'] . ' richiede OpenSearch: con la ricerca MySQL non è installabile.';
+                $err[] = t('{m} richiede OpenSearch: con la ricerca MySQL non è installabile.', ['m' => $m['label']]);
                 continue;
             }
             if (!empty($m['min_php']) && ($cli = php_cli_info()) && version_compare($cli['version'], $m['min_php'], '<')) {
-                $err[] = $m['label'] . ' richiede PHP ' . $m['min_php'] . ' o successivo: il PHP da riga di comando è ' . $cli['version'] . '.';
+                $err[] = t('{m} richiede PHP {r} o successivo: il PHP da riga di comando è {c}.', ['m' => $m['label'], 'r' => $m['min_php'], 'c' => $cli['version']]);
                 continue;
             }
             if (!empty($m['needs_2fa']) && !empty($in['disable_2fa'])) {
-                $err[] = $m['label'] . ' dipende dall\'autenticazione a due fattori: non si può disattivare il 2FA con questo modulo.';
+                $err[] = t('{m} dipende dall\'autenticazione a due fattori: non si può disattivare il 2FA con questo modulo.', ['m' => $m['label']]);
                 continue;
             }
             // Già incluso dalla distro (es. RMA in quella italiana): non lo duplichiamo.
@@ -225,12 +226,12 @@ function validate_install(array $in): array
     $feCreds = [];
     $checkoutId = '';
     if (!$fe) {
-        $err[] = 'Tema non valido.';
+        $err[] = t('Tema non valido.');
     } else {
         // Variante CSP del tema (opzionale): cambia pacchetto e tema attivo.
         $csp = !empty($in['hyva_csp']);
         if ($csp && empty($fe['csp'])) {
-            $err[] = 'La variante CSP non esiste per il tema scelto.';
+            $err[] = t('La variante CSP non esiste per il tema scelto.');
             $csp = false;
         }
         if ($csp) {
@@ -244,7 +245,7 @@ function validate_install(array $in): array
             }
         }
         if (!$co) {
-            $err[] = 'Checkout non valido per il tema scelto.';
+            $err[] = t('Checkout non valido per il tema scelto.');
         } else {
             $checkoutId = $co['id'];
             foreach (($fe['packages'] ?? []) + $co['packages'] as $n => $v) {
@@ -256,7 +257,7 @@ function validate_install(array $in): array
         if (!empty($fe['repository'])) {
             $keys = parse_hyva_keys((string)($in['hyva_keys'] ?? ''));
             if (!$keys) {
-                $err[] = 'Chiavi Hyvä non riconosciute: incolla il blocco copiato dall\'area licenze di Hyvä.';
+                $err[] = t('Chiavi Hyvä non riconosciute: incolla il blocco copiato dall\'area licenze di Hyvä.');
             } else {
                 $r = $fe['repository'];
                 $repos[$r['id']] = ['id' => $r['id'], 'name' => 'Hyvä', 'url' => str_replace('{project}', $keys['project'], $r['url']), 'host' => $r['host']];
@@ -287,7 +288,7 @@ function validate_install(array $in): array
         $u = trim((string)($c['user'] ?? ''));
         $pw = (string)($c['password'] ?? '');
         if ($u === '' || $pw === '') {
-            $err[] = 'Inserisci le credenziali per ' . $r['host'] . '.';
+            $err[] = t('Inserisci le credenziali per {h}.', ['h' => $r['host']]);
         }
         $credentials[$r['host']] = ['username' => $u, 'password' => $pw];
     }
@@ -300,7 +301,7 @@ function validate_install(array $in): array
         'base_url' => $baseUrl,
         'backend_frontname' => $front,
         'store_name' => $s('store_name') ?: ($platform['name'] ?? 'Magento') . ' Store',
-        'language' => $lang, 'currency' => $cur, 'timezone' => $tz,
+        'ui_lang' => current_lang(), 'language' => $lang, 'currency' => $cur, 'timezone' => $tz,
         'db' => $db,
         'create_db' => !empty($in['create_db']),
         'cleanup_db' => !empty($in['cleanup_db']),
@@ -341,12 +342,12 @@ function running_job(): ?string
 function start_install(array $config): array
 {
     if (!is_writable(APP_ROOT)) {
-        return ['error' => 'Il processo PHP non può scrivere nella cartella dell\'installer (' . APP_ROOT . '): serve per il blocco .installed e per la rimozione finale. Correggi i permessi.'];
+        return ['error' => t('Il processo PHP non può scrivere nella cartella dell\'installer ({d}): serve per il blocco .installed e per la rimozione finale. Correggi i permessi.', ['d' => APP_ROOT])];
     }
     // Il controllo "c'è un job in corso" e la creazione del nuovo devono essere un'unica operazione.
     $lock = @fopen(app_tmp() . '/start.lock', 'c');
     if (!$lock || !flock($lock, LOCK_EX)) {
-        return ['error' => 'Impossibile ottenere il blocco di avvio in ' . app_tmp() . '.'];
+        return ['error' => t('Impossibile ottenere il blocco di avvio in {d}.', ['d' => app_tmp()])];
     }
     try {
         return start_install_locked($config);
@@ -359,16 +360,16 @@ function start_install(array $config): array
 function start_install_locked(array $config): array
 {
     if ($busy = running_job()) {
-        return ['error' => 'Un\'installazione è già in corso: attendi che finisca o annullala.', 'job' => $busy, 'busy' => true];
+        return ['error' => t('Un\'installazione è già in corso: attendi che finisca o annullala.'), 'job' => $busy, 'busy' => true];
     }
     $php = find_php_cli();
     if (!$php) {
-        return ['error' => 'PHP CLI non trovato: impossibile avviare l\'installazione in background.'];
+        return ['error' => t('PHP CLI non trovato: impossibile avviare l\'installazione in background.')];
     }
     $id = bin2hex(random_bytes(8));
     $dir = job_dir($id);
     if (!@mkdir($dir, 0700, true)) {
-        return ['error' => 'Impossibile creare la cartella del job in ' . $dir];
+        return ['error' => t('Impossibile creare la cartella del job in {d}', ['d' => $dir])];
     }
     $old = umask(0077);
     file_put_contents($dir . '/job.json', json_encode($config, JSON_UNESCAPED_SLASHES));
@@ -386,7 +387,7 @@ function start_install_locked(array $config): array
         . ' < /dev/null > ' . escapeshellarg($dir . '/worker.out') . ' 2>&1 3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&- &';
     $p = proc_open(['/bin/sh', '-c', $cmd], [], $pipes, null, shell_env());
     if (!is_resource($p)) {
-        return ['error' => 'Impossibile avviare il processo di installazione.'];
+        return ['error' => t('Impossibile avviare il processo di installazione.')];
     }
     proc_close($p);
     return ['job' => $id];
@@ -426,7 +427,7 @@ function job_status(string $id, int $since): array
 {
     $dir = job_dir($id);
     if (!valid_job_id($id) || !is_dir($dir)) {
-        return ['error' => 'Job inesistente.'];
+        return ['error' => t('Job inesistente.')];
     }
     $status = json_decode((string)@file_get_contents($dir . '/status.json'), true) ?: ['state' => 'unknown'];
     $log = '';
@@ -446,7 +447,7 @@ function job_status(string $id, int $since): array
             $out = trim((string)@file_get_contents($dir . '/worker.out'));
             scrub_job_dir($dir);
             $status['state'] = 'failed';
-            $status['error'] = 'Il processo di installazione si è interrotto inaspettatamente.' . ($out !== '' ? "\n" . substr($out, -800) : '');
+            $status['error'] = t('Il processo di installazione si è interrotto inaspettatamente.') . ($out !== '' ? "\n" . substr($out, -800) : '');
         }
     }
     return ['status' => $status, 'log' => $log, 'offset' => $since + strlen($log), 'size' => $size];

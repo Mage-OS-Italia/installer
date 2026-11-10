@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+/** Campi di testo dei cataloghi JSON (scritti in italiano) che si traducono con t(). */
+const CATALOG_TEXT_FIELDS = ['name', 'label', 'description', 'tagline', 'group', 'highlights'];
+
 /** Estensioni richieste comunque da Magento/Mage-OS, usate se il repository non è raggiungibile. */
 const FALLBACK_EXTENSIONS = ['bcmath', 'ctype', 'curl', 'dom', 'gd', 'hash', 'iconv', 'intl', 'mbstring', 'openssl', 'pdo_mysql', 'simplexml', 'soap', 'sodium', 'xsl', 'zip'];
 
@@ -214,7 +217,7 @@ function distros(): array
         $d = json_decode((string)file_get_contents($f), true);
         if (is_array($d) && !empty($d['id']) && preg_match('/^[a-z0-9_-]+$/', $d['id'])) {
             $d['order'] = $d['order'] ?? 100;
-            $out[$d['id']] = $d;
+            $out[$d['id']] = t_fields($d, CATALOG_TEXT_FIELDS);
         }
     }
     uasort($out, fn($a, $b) => $a['order'] <=> $b['order']);
@@ -246,7 +249,7 @@ function mageos_modules(): array
     $out = [];
     foreach (is_array($list) ? $list : [] as $m) {
         if (is_array($m) && preg_match('#^mage-os/[a-z0-9_.-]+$#', (string)($m['name'] ?? '')) && !empty($m['constraint'])) {
-            $out[] = $m;
+            $out[] = t_fields($m, CATALOG_TEXT_FIELDS);
         }
     }
     return $out;
@@ -256,7 +259,7 @@ function mageos_modules(): array
 function frontends(): array
 {
     $list = json_decode((string)@file_get_contents(APP_ROOT . '/catalog/frontend.json'), true);
-    return is_array($list) ? $list : [];
+    return is_array($list) ? t_fields($list, CATALOG_TEXT_FIELDS) : [];
 }
 
 /**
@@ -305,9 +308,9 @@ function locale_options(): array
             'el_GR' => 'Ελληνικά', 'hu_HU' => 'Magyar', 'tr_TR' => 'Türkçe',
         ],
         'currencies' => [
-            'EUR' => 'Euro', 'USD' => 'Dollaro USA', 'GBP' => 'Sterlina', 'CHF' => 'Franco svizzero', 'SEK' => 'Corona svedese',
-            'DKK' => 'Corona danese', 'NOK' => 'Corona norvegese', 'PLN' => 'Złoty', 'CZK' => 'Corona ceca', 'HUF' => 'Fiorino',
-            'RON' => 'Leu', 'BRL' => 'Real', 'CAD' => 'Dollaro canadese', 'AUD' => 'Dollaro australiano', 'TRY' => 'Lira turca',
+            'EUR' => t('Euro'), 'USD' => t('Dollaro USA'), 'GBP' => t('Sterlina'), 'CHF' => t('Franco svizzero'), 'SEK' => t('Corona svedese'),
+            'DKK' => t('Corona danese'), 'NOK' => t('Corona norvegese'), 'PLN' => 'Złoty', 'CZK' => t('Corona ceca'), 'HUF' => t('Fiorino'),
+            'RON' => 'Leu', 'BRL' => 'Real', 'CAD' => t('Dollaro canadese'), 'AUD' => t('Dollaro australiano'), 'TRY' => t('Lira turca'),
         ],
         'timezones' => DateTimeZone::listIdentifiers(),
     ];
