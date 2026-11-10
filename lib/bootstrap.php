@@ -8,6 +8,7 @@ const MAGENTO_REPO = 'https://mirror.mage-os.org/';
 const MAGEOS_REPO = 'https://repo.mage-os.org/';
 
 define('APP_ROOT', dirname(__DIR__));
+require __DIR__ . '/i18n.php';
 
 /**
  * Cartella temporanea privata dell'installer (job, log, cache, token): fuori dalla document root.
@@ -19,19 +20,19 @@ function app_tmp(string $sub = ''): string
     $dir = rtrim(sys_get_temp_dir(), '/') . '/magento-installer-' . substr(md5(APP_ROOT), 0, 10);
     if (!isset($checked[$dir])) {
         if (is_link($dir)) {
-            throw new RuntimeException("$dir è un link simbolico: cartella temporanea rifiutata. Eliminala e ricarica la pagina.");
+            throw new RuntimeException(t('{d} è un link simbolico: cartella temporanea rifiutata. Eliminala e ricarica la pagina.', ['d' => $dir]));
         }
         if (!is_dir($dir)) {
             $old = umask(0077);
             $made = @mkdir($dir, 0700, true);
             umask($old);
             if (!$made && !is_dir($dir)) {
-                throw new RuntimeException("Impossibile creare la cartella temporanea $dir.");
+                throw new RuntimeException(t('Impossibile creare la cartella temporanea {d}.', ['d' => $dir]));
             }
         }
         $uid = function_exists('posix_geteuid') ? posix_geteuid() : null;
         if ($uid !== null && fileowner($dir) !== $uid) {
-            throw new RuntimeException("$dir appartiene a un altro utente: cartella temporanea rifiutata. Eliminala (o fai eliminare a chi l'ha creata) e ricarica la pagina.");
+            throw new RuntimeException(t("{d} appartiene a un altro utente: cartella temporanea rifiutata. Eliminala (o fai eliminare a chi l'ha creata) e ricarica la pagina.", ['d' => $dir]));
         }
         if ((fileperms($dir) & 0077) !== 0) {
             @chmod($dir, 0700);
@@ -334,11 +335,11 @@ function remove_installer(): array
 {
     $root = realpath(APP_ROOT);
     if (!$root || $root === '/' || $root === home_dir()) {
-        return ['ok' => false, 'error' => 'Percorso non sicuro.', 'failed' => [], 'left' => [], 'locked' => is_file(APP_ROOT . '/.installed')];
+        return ['ok' => false, 'error' => t('Percorso non sicuro.'), 'failed' => [], 'left' => [], 'locked' => is_file(APP_ROOT . '/.installed')];
     }
     // Il blocco prima di tutto: se non si può scrivere non si cancella nulla, altrimenti resterebbe un installer svuotato e ancora usabile.
     if (!is_file("$root/.installed") && @file_put_contents("$root/.installed", date('c') . "\n") === false) {
-        return ['ok' => false, 'error' => 'La cartella non è scrivibile: non ho eliminato nulla.', 'failed' => [], 'left' => [], 'locked' => false];
+        return ['ok' => false, 'error' => t('La cartella non è scrivibile: non ho eliminato nulla.'), 'failed' => [], 'left' => [], 'locked' => false];
     }
     $failed = [];
     // Prima i file di contorno; codice (lib, worker, index) solo se è andato tutto bene, così un'installer rimasto a metà resta almeno in grado di mostrare il blocco.

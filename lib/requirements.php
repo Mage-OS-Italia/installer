@@ -51,38 +51,38 @@ function run_requirements(array $p): array
     $php = [];
     $cli = php_cli_info();
     $constraint = $version['php'] ?? '';
-    $phpHuman = $constraint !== '' ? preg_replace('/~?(\d+\.\d+)\.0/', '$1.x', str_replace('||', ' · ', $constraint)) : 'n/d';
+    $phpHuman = $constraint !== '' ? preg_replace('/~?(\d+\.\d+)\.0/', '$1.x', str_replace('||', ' · ', $constraint)) : t('n/d');
 
     if ($constraint !== '') {
-        $php[] = chk('php_web', 'PHP del web server (' . PHP_SAPI . ')', php_satisfies(PHP_VERSION, $constraint) ? 'ok' : 'fail',
-            'Installato ' . PHP_VERSION . ' · richiesto ' . $phpHuman,
-            'Usa una versione PHP supportata da ' . $platform['name'] . ' ' . ($version['version'] ?? '') . '.');
+        $php[] = chk('php_web', t('PHP del web server ({sapi})', ['sapi' => PHP_SAPI]), php_satisfies(PHP_VERSION, $constraint) ? 'ok' : 'fail',
+            t('Installato {v} · richiesto {r}', ['v' => PHP_VERSION, 'r' => $phpHuman]),
+            t('Usa una versione PHP supportata da {p} {v}.', ['p' => $platform['name'], 'v' => $version['version'] ?? '']));
     }
     if ($cli) {
-        $php[] = chk('php_cli', 'PHP da riga di comando', $constraint === '' || php_satisfies($cli['version'], $constraint) ? 'ok' : 'fail',
+        $php[] = chk('php_cli', t('PHP da riga di comando'), $constraint === '' || php_satisfies($cli['version'], $constraint) ? 'ok' : 'fail',
             $cli['path'] . ' · ' . $cli['version'],
-            'Composer e bin/magento girano con il PHP CLI: deve essere una versione supportata.');
+            t('Composer e bin/magento girano con il PHP CLI: deve essere una versione supportata.'));
     } else {
-        $php[] = chk('php_cli', 'PHP da riga di comando', 'fail', 'Binario php CLI non trovato', 'Installa php-cli e rendilo raggiungibile nel PATH.');
+        $php[] = chk('php_cli', t('PHP da riga di comando'), 'fail', t('Binario php CLI non trovato'), t('Installa php-cli e rendilo raggiungibile nel PATH.'));
     }
 
     $exec = exec_available();
-    $php[] = chk('exec', 'Esecuzione comandi (exec / proc_open)', $exec ? 'ok' : 'fail',
-        $exec ? 'Disponibile' : 'Disabilitata in disable_functions',
-        'L\'installer lancia composer e bin/magento: rimuovi exec e proc_open da disable_functions.');
+    $php[] = chk('exec', t('Esecuzione comandi (exec / proc_open)'), $exec ? 'ok' : 'fail',
+        $exec ? t('Disponibile') : t('Disabilitata in disable_functions'),
+        t('L\'installer lancia composer e bin/magento: rimuovi exec e proc_open da disable_functions.'));
 
     $mem = ini_bytes((string)ini_get('memory_limit'));
     $php[] = chk('memory', 'memory_limit (web)', ($mem === -1 || $mem >= 756 * 1024 ** 2) ? 'ok' : 'warn',
-        (string)ini_get('memory_limit'), 'Per l\'uso quotidiano di Magento si consigliano almeno 756M (2G per i processi di indicizzazione). Composer e setup usano memory_limit illimitato.');
+        (string)ini_get('memory_limit'), t('Per l\'uso quotidiano di Magento si consigliano almeno 756M (2G per i processi di indicizzazione). Composer e setup usano memory_limit illimitato.'));
     $met = (int)ini_get('max_execution_time');
-    $php[] = chk('max_exec', 'max_execution_time (web)', ($met === 0 || $met >= 180) ? 'ok' : 'warn', $met === 0 ? 'Illimitato' : "$met s",
-        'L\'installazione gira in background e non è soggetta a questo limite; per l\'admin si consigliano almeno 180 s.');
+    $php[] = chk('max_exec', 'max_execution_time (web)', ($met === 0 || $met >= 180) ? 'ok' : 'warn', $met === 0 ? t('Illimitato') : "$met s",
+        t('L\'installazione gira in background e non è soggetta a questo limite; per l\'admin si consigliano almeno 180 s.'));
     $opcache = filter_var(ini_get('opcache.enable'), FILTER_VALIDATE_BOOL);
     $php[] = chk('opcache_comments', 'opcache.save_comments', (!$opcache || filter_var(ini_get('opcache.save_comments'), FILTER_VALIDATE_BOOL)) ? 'ok' : 'fail',
-        $opcache ? 'OPcache attivo, save_comments=' . ini_get('opcache.save_comments') : 'OPcache non attivo',
-        'Magento usa le annotazioni: imposta opcache.save_comments=1.');
+        $opcache ? t('OPcache attivo, save_comments={v}', ['v' => ini_get('opcache.save_comments')]) : t('OPcache non attivo'),
+        t('Magento usa le annotazioni: imposta opcache.save_comments=1.'));
     $php[] = chk('allow_url_fopen', 'allow_url_fopen', filter_var(ini_get('allow_url_fopen'), FILTER_VALIDATE_BOOL) ? 'ok' : 'warn',
-        ini_get('allow_url_fopen') ? 'Attivo' : 'Disattivo', 'Alcune funzioni di Magento scaricano file remoti.');
+        ini_get('allow_url_fopen') ? t('Attivo') : t('Disattivo'), t('Alcune funzioni di Magento scaricano file remoti.'));
     $groups[] = ['title' => 'PHP', 'checks' => $php];
 
     // --- Estensioni ---
@@ -94,24 +94,24 @@ function run_requirements(array $p): array
         $web = extension_loaded($e);
         $inCli = !$cli || in_array(strtolower($e), $cliExt, true);
         $status = ($web && $inCli) ? 'ok' : 'fail';
-        $detail = $web && $inCli ? 'Caricata' : (!$web && !$inCli ? 'Mancante (web e CLI)' : (!$web ? 'Mancante nel PHP web' : 'Mancante nel PHP CLI'));
-        $ext[] = chk('ext_' . $e, 'ext-' . $e, $status, $detail, $status === 'fail' ? "Installa e abilita l'estensione PHP $e." : '');
+        $detail = $web && $inCli ? t('Caricata') : (!$web && !$inCli ? t('Mancante (web e CLI)') : (!$web ? t('Mancante nel PHP web') : t('Mancante nel PHP CLI')));
+        $ext[] = chk('ext_' . $e, 'ext-' . $e, $status, $detail, $status === 'fail' ? t("Installa e abilita l'estensione PHP {e}.", ['e' => $e]) : '');
     }
-    $groups[] = ['title' => 'Estensioni PHP richieste da ' . $platform['name'] . ' ' . ($version['version'] ?? ''), 'checks' => $ext];
+    $groups[] = ['title' => t('Estensioni PHP richieste da {p} {v}', ['p' => $platform['name'], 'v' => $version['version'] ?? '']), 'checks' => $ext];
 
     // --- Strumenti ---
     $tools = [];
     $comp = composer_info();
     if (!$comp['found']) {
-        $tools[] = chk('composer', 'Composer', 'warn', 'Non trovato', 'Verrà scaricato automaticamente (composer.phar) all\'avvio dell\'installazione.');
+        $tools[] = chk('composer', 'Composer', 'warn', t('Non trovato'), t('Verrà scaricato automaticamente (composer.phar) all\'avvio dell\'installazione.'));
     } else {
         $okv = $comp['version'] && version_compare($comp['version'], '2.2', '>=');
-        $tools[] = chk('composer', 'Composer', $okv ? 'ok' : 'fail', ($comp['version'] ?? 'versione sconosciuta') . ' · ' . $comp['path'],
-            'Serve Composer 2.2 o superiore.');
+        $tools[] = chk('composer', 'Composer', $okv ? 'ok' : 'fail', ($comp['version'] ?? t('versione sconosciuta')) . ' · ' . $comp['path'],
+            t('Serve Composer 2.2 o superiore.'));
     }
-    $tools[] = chk('unzip', 'unzip', sh('command -v unzip') !== '' ? 'ok' : 'warn', sh('command -v unzip') ?: 'Non trovato',
-        'Composer scompatta più velocemente con unzip.');
-    $groups[] = ['title' => 'Strumenti', 'checks' => $tools];
+    $tools[] = chk('unzip', 'unzip', sh('command -v unzip') !== '' ? 'ok' : 'warn', sh('command -v unzip') ?: t('Non trovato'),
+        t('Composer scompatta più velocemente con unzip.'));
+    $groups[] = ['title' => t('Strumenti'), 'checks' => $tools];
 
     // --- Filesystem ---
     $fs = [];
@@ -125,25 +125,25 @@ function run_requirements(array $p): array
         $exists = is_dir($target);
         $empty = $exists ? (count(array_diff(scandir($target) ?: [], ['.', '..'])) === 0) : true;
         if ($exists && !$empty) {
-            $fs[] = chk('target_empty', 'Cartella di destinazione', 'fail', $target . ' non è vuota', 'Scegli una cartella vuota o non esistente.');
+            $fs[] = chk('target_empty', t('Cartella di destinazione'), 'fail', t('{t} non è vuota', ['t' => $target]), t('Scegli una cartella vuota o non esistente.'));
         } else {
-            $fs[] = chk('target_empty', 'Cartella di destinazione', is_writable($parent) ? 'ok' : 'fail',
-                $target . ($exists ? ' (vuota)' : ' (verrà creata)'), is_writable($parent) ? '' : "Il processo PHP non può scrivere in $parent.");
+            $fs[] = chk('target_empty', t('Cartella di destinazione'), is_writable($parent) ? 'ok' : 'fail',
+                $target . ($exists ? t(' (vuota)') : t(' (verrà creata)')), is_writable($parent) ? '' : t('Il processo PHP non può scrivere in {p}.', ['p' => $parent]));
         }
     }
     $free = @disk_free_space($parent);
     if ($free !== false) {
-        $fs[] = chk('disk', 'Spazio su disco', $free >= 6 * 1024 ** 3 ? 'ok' : ($free >= 3 * 1024 ** 3 ? 'warn' : 'fail'),
-            human_bytes($free) . ' liberi', 'Servono circa 3 GB (6 GB consigliati, più i dati di esempio).');
+        $fs[] = chk('disk', t('Spazio su disco'), $free >= 6 * 1024 ** 3 ? 'ok' : ($free >= 3 * 1024 ** 3 ? 'warn' : 'fail'),
+            t('{b} liberi', ['b' => human_bytes($free)]), t('Servono circa 3 GB (6 GB consigliati, più i dati di esempio).'));
     }
-    $fs[] = chk('installer_dir', 'Cartella dell\'installer', is_writable(APP_ROOT) ? 'ok' : 'fail', APP_ROOT,
-        'Il processo PHP deve poterci scrivere: a fine installazione crea il blocco .installed e si elimina. Se i file appartengono a un altro utente correggi proprietario o permessi.');
-    $fs[] = chk('tmp', 'Cartella di lavoro dell\'installer', is_writable(app_tmp()) ? 'ok' : 'fail', app_tmp(), 'Deve essere scrivibile per job e log.');
-    $groups[] = ['title' => 'File system', 'checks' => $fs];
+    $fs[] = chk('installer_dir', t('Cartella dell\'installer'), is_writable(APP_ROOT) ? 'ok' : 'fail', APP_ROOT,
+        t('Il processo PHP deve poterci scrivere: a fine installazione crea il blocco .installed e si elimina. Se i file appartengono a un altro utente correggi proprietario o permessi.'));
+    $fs[] = chk('tmp', t('Cartella di lavoro dell\'installer'), is_writable(app_tmp()) ? 'ok' : 'fail', app_tmp(), t('Deve essere scrivibile per job e log.'));
+    $groups[] = ['title' => t('File system'), 'checks' => $fs];
 
     // --- Rete ---
     $net = [];
-    $hosts = [$platform['repo'] . 'packages.json' => 'Repository ' . $platform['name'], 'https://repo.packagist.org/packages.json' => 'Packagist'];
+    $hosts = [$platform['repo'] . 'packages.json' => t('Repository {p}', ['p' => $platform['name']]), 'https://repo.packagist.org/packages.json' => 'Packagist'];
     foreach ((array)($p['repos'] ?? []) as $url) {
         if (is_string($url) && preg_match('#^https://[\w.\-]+(/|$)#', $url)) {
             $hosts[rtrim($url, '/') . '/packages.json'] = parse_url($url, PHP_URL_HOST);
@@ -153,10 +153,10 @@ function run_requirements(array $p): array
         $r = http_get($url, 6, [], true);
         $reach = $r['ok'] && $r['code'] > 0 && $r['code'] < 500;
         $net[] = chk('net_' . md5($url), $name, $reach ? 'ok' : 'fail',
-            $reach ? 'Raggiungibile (HTTP ' . $r['code'] . ')' : 'Non raggiungibile' . ($r['error'] ? ': ' . $r['error'] : ''),
-            'Il server deve poter raggiungere ' . parse_url($url, PHP_URL_HOST) . ' in HTTPS.');
+            $reach ? t('Raggiungibile (HTTP {c})', ['c' => $r['code']]) : t('Non raggiungibile') . ($r['error'] ? ': ' . $r['error'] : ''),
+            t('Il server deve poter raggiungere {h} in HTTPS.', ['h' => parse_url($url, PHP_URL_HOST)]));
     }
-    $groups[] = ['title' => 'Rete', 'checks' => $net];
+    $groups[] = ['title' => t('Rete'), 'checks' => $net];
 
     $fail = $warn = 0;
     foreach ($groups as $g) {
@@ -262,15 +262,15 @@ function test_db(array $p): array
     $user = (string)($p['user'] ?? '');
     $pass = (string)($p['password'] ?? '');
     if ($host === '' || $name === '' || $user === '') {
-        return ['status' => 'fail', 'message' => 'Compila host, nome database e utente.'];
+        return ['status' => 'fail', 'message' => t('Compila host, nome database e utente.')];
     }
     if (!extension_loaded('pdo_mysql')) {
-        return ['status' => 'fail', 'message' => 'Estensione pdo_mysql non disponibile.'];
+        return ['status' => 'fail', 'message' => t('Estensione pdo_mysql non disponibile.')];
     }
     try {
         $pdo = db_connect($host, $user, $pass);
     } catch (Throwable $e) {
-        return ['status' => 'fail', 'message' => 'Connessione fallita: ' . $e->getMessage()];
+        return ['status' => 'fail', 'message' => t('Connessione fallita: {e}', ['e' => $e->getMessage()])];
     }
     $raw = (string)$pdo->query('SELECT VERSION()')->fetchColumn();
     $isMaria = stripos($raw, 'mariadb') !== false;
@@ -281,7 +281,7 @@ function test_db(array $p): array
     if (!db_is_supported($isMaria, $num, $platform, (string)($p['version'] ?? ''))) {
         $list = db_supported_human($platform, (string)($p['version'] ?? ''))[$isMaria ? 'mariadb' : 'mysql'];
         return $res + ['status' => 'fail', 'unsupported' => true,
-            'message' => $res['server'] . " $num non è supportato da Magento. Versioni supportate: $list."];
+            'message' => t('{s} {n} non è supportato da Magento. Versioni supportate: {l}.', ['s' => $res['server'], 'n' => $num, 'l' => $list])];
     }
     $st = $pdo->prepare('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ?');
     $st->execute([$name]);
@@ -290,12 +290,12 @@ function test_db(array $p): array
     $res['exists'] = $exists;
     $res['tables'] = $tables;
     if (!$exists) {
-        return $res + ['status' => 'ok', 'message' => $res['server'] . " $num · il database \"$name\" non esiste e verrà creato."];
+        return $res + ['status' => 'ok', 'message' => t('{s} {n} · il database "{d}" non esiste e verrà creato.', ['s' => $res['server'], 'n' => $num, 'd' => $name])];
     }
     if ($tables > 0) {
-        return $res + ['status' => 'warn', 'message' => $res['server'] . " $num · il database contiene già $tables tabelle: attiva \"Svuota il database\" per reinstallare."];
+        return $res + ['status' => 'warn', 'message' => t('{s} {n} · il database contiene già {t} tabelle: attiva "Svuota il database" per reinstallare.', ['s' => $res['server'], 'n' => $num, 't' => $tables])];
     }
-    return $res + ['status' => 'ok', 'message' => $res['server'] . " $num · connessione riuscita, database vuoto."];
+    return $res + ['status' => 'ok', 'message' => t('{s} {n} · connessione riuscita, database vuoto.', ['s' => $res['server'], 'n' => $num])];
 }
 
 function db_connect(string $host, string $user, string $pass, ?string $dbname = null): PDO
@@ -335,7 +335,7 @@ function test_search(array $p): array
     $host = trim((string)($p['host'] ?? ''));
     $port = (int)($p['port'] ?? 9200);
     if (!preg_match('/^[\w.\-]+$/', $host) || $port < 1 || $port > 65535) {
-        return ['status' => 'fail', 'message' => 'Host o porta non validi.'];
+        return ['status' => 'fail', 'message' => t('Host o porta non validi.')];
     }
     $headers = [];
     if (!empty($p['user'])) {
@@ -358,23 +358,23 @@ function test_search(array $p): array
         }
     }
     if ($r['ok'] && $r['code'] !== 401 && $headers && $scheme === 'http' && !$local) {
-        return ['status' => 'fail', 'message' => 'Il servizio risponde in HTTP senza chiedere autenticazione: le credenziali inserite non sono state inviate, ma l\'installazione le manderebbe in chiaro. Cancellale oppure abilita HTTPS con un certificato valido.'];
+        return ['status' => 'fail', 'message' => t('Il servizio risponde in HTTP senza chiedere autenticazione: le credenziali inserite non sono state inviate, ma l\'installazione le manderebbe in chiaro. Cancellale oppure abilita HTTPS con un certificato valido.')];
     }
     if ($r['ok'] && $r['code'] === 401 && $headers && $scheme === 'http' && !$local) {
-        return ['status' => 'fail', 'message' => 'Il servizio richiede l\'autenticazione ma risponde solo in HTTP: le credenziali non sono state inviate perché passerebbero in chiaro. Abilita HTTPS con un certificato valido.'];
+        return ['status' => 'fail', 'message' => t('Il servizio richiede l\'autenticazione ma risponde solo in HTTP: le credenziali non sono state inviate perché passerebbero in chiaro. Abilita HTTPS con un certificato valido.')];
     }
     if (!$r['ok']) {
-        return ['status' => 'fail', 'message' => "Nessuna risposta da $host:$port" . ($r['error'] ? ' (' . $r['error'] . ')' : '') . '.'];
+        return ['status' => 'fail', 'message' => t('Nessuna risposta da {h}:{p}', ['h' => $host, 'p' => $port]) . ($r['error'] ? ' (' . $r['error'] . ')' : '') . '.'];
     }
     $j = json_decode($r['body'], true);
     if ($r['code'] === 401) {
         return ['status' => 'fail', 'message' => $verified || !$headers
-            ? 'Autenticazione richiesta: inserisci utente e password.'
-            : 'Il servizio richiede l\'autenticazione ma il suo certificato HTTPS non è verificabile: le credenziali non sono state inviate. Installa un certificato valido o usa un host locale.'];
+            ? t('Autenticazione richiesta: inserisci utente e password.')
+            : t('Il servizio richiede l\'autenticazione ma il suo certificato HTTPS non è verificabile: le credenziali non sono state inviate. Installa un certificato valido o usa un host locale.')];
     }
     $num = $j['version']['number'] ?? null;
     if (!$num) {
-        return ['status' => 'fail', 'message' => 'Il servizio risponde ma non sembra OpenSearch/Elasticsearch.'];
+        return ['status' => 'fail', 'message' => t('Il servizio risponde ma non sembra OpenSearch/Elasticsearch.')];
     }
     $isOs = ($j['version']['distribution'] ?? '') === 'opensearch';
     $min = service_minimums((string)($p['version'] ?? ''))[$isOs ? 'opensearch' : 'elasticsearch'];
@@ -383,13 +383,13 @@ function test_search(array $p): array
     $label = ($isOs ? 'OpenSearch ' : 'Elasticsearch ') . $num;
     $extra = ['engine' => $engine, 'scheme' => $scheme];
     if (version_compare($num, $min, '<')) {
-        return ['status' => 'fail', 'message' => "$label è troppo vecchio: serve almeno $min."] + $extra;
+        return ['status' => 'fail', 'message' => t('{l} è troppo vecchio: serve almeno {m}.', ['l' => $label, 'm' => $min])] + $extra;
     }
     if ($engine === 'elasticsearch7' && !empty($p['version']) && !es7_supported((string)($p['platform'] ?? 'magento'), (string)$p['version'])) {
-        return ['status' => 'fail', 'message' => "$label non è supportato da questa versione: il modulo Elasticsearch 7 è stato tolto. Usa OpenSearch o Elasticsearch 8."] + $extra;
+        return ['status' => 'fail', 'message' => t('{l} non è supportato da questa versione: il modulo Elasticsearch 7 è stato tolto. Usa OpenSearch o Elasticsearch 8.', ['l' => $label])] + $extra;
     }
     if (!$verified) {
-        return ['status' => 'warn', 'version' => $num, 'message' => "$label raggiungibile in HTTPS, ma il certificato non è verificabile: Magento non ha un'opzione per ignorarlo e l'installazione potrebbe fallire dopo il passo di composer. Usa un certificato valido o l'HTTP su rete locale."] + $extra;
+        return ['status' => 'warn', 'version' => $num, 'message' => t("{l} raggiungibile in HTTPS, ma il certificato non è verificabile: Magento non ha un'opzione per ignorarlo e l'installazione potrebbe fallire dopo il passo di composer. Usa un certificato valido o l'HTTP su rete locale.", ['l' => $label])] + $extra;
     }
-    return ['status' => 'ok', 'version' => $num, 'message' => "$label raggiungibile" . ($scheme === 'https' ? ' (HTTPS).' : '.')] + $extra;
+    return ['status' => 'ok', 'version' => $num, 'message' => ($scheme === 'https' ? t('{l} raggiungibile (HTTPS).', ['l' => $label]) : t('{l} raggiungibile.', ['l' => $label]))] + $extra;
 }

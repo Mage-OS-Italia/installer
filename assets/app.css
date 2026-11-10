@@ -240,3 +240,9 @@ input.bad { border-color: var(--fail); }
 .fold[open] .fold-cta::after { content: 'Chiudi'; color: var(--muted); }
 .fold-count { font-size: 12.5px; color: var(--muted); }
 .fold-body { padding: 4px 16px 16px; }
+
+.lang-switch{display:flex;gap:6px;margin:0 0 14px}
+.lang-switch .lang{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:7px 10px;border-radius:10px;border:1px solid var(--line,rgba(255,255,255,.14));background:transparent;color:var(--muted,#9aa4b2);font:inherit;font-size:12.5px;font-weight:600;letter-spacing:.04em;cursor:pointer}
+.lang-switch .lang svg{border-radius:2px;box-shadow:0 0 0 1px rgba(0,0,0,.25);flex:none}
+.lang-switch .lang:hover{color:var(--text)}
+.lang-switch .lang.on{color:var(--text);border-color:var(--orange);background:rgba(255,255,255,.06)}

@@ -53,8 +53,9 @@ final class Worker
         $this->dir = job_dir($id);
         $this->cfg = json_decode((string)@file_get_contents($this->dir . '/job.json'), true);
         if (!is_array($this->cfg)) {
-            throw new RuntimeException('job.json assente o non leggibile.');
+            throw new RuntimeException(t('job.json assente o non leggibile.'));
         }
+        set_lang((string)($this->cfg['ui_lang'] ?? 'it'));
         // Da qui le credenziali vivono solo in memoria: un worker ucciso (OOM, riavvio) non lascia il file in chiaro.
         @unlink($this->dir . '/job.json');
         $this->php = find_php_cli() ?? PHP_BINARY;
@@ -76,7 +77,9 @@ final class Worker
         $steps = [];
         foreach (self::STEPS as $sid => $label) {
             if ($sid === 'download') {
-                $label = 'Download di ' . platform_of($this->cfg['platform'])['name'] . ' ' . $this->cfg['version'];
+                $label = t('Download di {p} {v}', ['p' => platform_of($this->cfg['platform'])['name'], 'v' => $this->cfg['version']]);
+            } else {
+                $label = t($label);
             }
             $steps[] = ['id' => $sid, 'label' => $label, 'state' => 'pending', 'detail' => '', 'progress' => null];
         }
@@ -87,8 +90,8 @@ final class Worker
 
     public function main(): int
     {
-        $this->log(APP_NAME . ' ' . APP_VERSION . ' · ' . platform_of($this->cfg['platform'])['name'] . ' ' . $this->cfg['version'] . ' · distro "' . $this->cfg['distro'] . '"');
-        $this->log('Destinazione: ' . $this->cfg['target']);
+        $this->log(APP_NAME . ' ' . APP_VERSION . ' · ' . platform_of($this->cfg['platform'])['name'] . ' ' . $this->cfg['version'] . ' · ' . t('distro "{d}"', ['d' => $this->cfg['distro']]));
+        $this->log(t('Destinazione: {t}', ['t' => $this->cfg['target']]));
         try {
             $this->step('preflight', fn() => $this->preflight());
             $this->step('download', fn() => $this->download());
@@ -98,7 +101,7 @@ final class Worker
             $this->step('finalize', fn() => $this->finalize());
         } catch (StepFailure $e) {
             $this->status['state'] = $e->getMessage() === 'cancelled' ? 'cancelled' : 'failed';
-            $this->status['error'] = $e->getMessage() === 'cancelled' ? 'Installazione annullata.' : str_replace($this->secrets, '••••••', $e->getMessage());
+            $this->status['error'] = $e->getMessage() === 'cancelled' ? t('Installazione annullata.') : str_replace($this->secrets, '••••••', $e->getMessage());
             $this->log('✖ ' . $this->status['error']);
             $this->rollback();
             $this->scrub();
@@ -107,7 +110,7 @@ final class Worker
         } catch (Throwable $e) {
             $this->status['state'] = 'failed';
             $this->status['error'] = str_replace($this->secrets, '••••••', $e->getMessage());
-            $this->log('✖ Errore: ' . $e->getMessage());
+            $this->log('✖ ' . t('Errore: {m}', ['m' => $e->getMessage()]));
             $this->rollback();
             $this->scrub();
             $this->save();
@@ -126,19 +129,19 @@ final class Worker
     {
         $c = $this->cfg;
         if (is_dir($c['target']) && count(array_diff(scandir($c['target']) ?: [], ['.', '..'])) > 0) {
-            throw new StepFailure('La cartella di destinazione non è più vuota: ' . $c['target']);
+            throw new StepFailure(t('La cartella di destinazione non è più vuota: {t}', ['t' => $c['target']]));
         }
         if (!is_writable(APP_ROOT)) {
-            throw new StepFailure('Il processo PHP non può scrivere nella cartella dell\'installer (' . APP_ROOT . '): servirebbe per il blocco finale. Correggi i permessi.');
+            throw new StepFailure(t('Il processo PHP non può scrivere nella cartella dell\'installer ({d}): servirebbe per il blocco finale. Correggi i permessi.', ['d' => APP_ROOT]));
         }
         $this->targetCreated = !is_dir($c['target']);
         $this->targetClean = true;
 
-        $this->log('Connessione al database ' . $c['db']['host'] . '…');
+        $this->log(t('Connessione al database {h}…', ['h' => $c['db']['host']]));
         try {
             $pdo = db_connect($c['db']['host'], $c['db']['user'], $c['db']['password']);
         } catch (Throwable $e) {
-            throw new StepFailure('Connessione al database fallita: ' . $e->getMessage());
+            throw new StepFailure(t('Connessione al database fallita: {m}', ['m' => $e->getMessage()]));
         }
         $raw = (string)$pdo->query('SELECT VERSION()')->fetchColumn();
         $this->dbIsMaria = stripos($raw, 'mariadb') !== false;
@@ -146,40 +149,40 @@ final class Worker
         $this->dbVersion = $vm[1] ?? '';
         if (!db_is_supported($this->dbIsMaria, $this->dbVersion, $c['platform'], $c['version'])) {
             if (!$c['allow_unsupported_db']) {
-                throw new StepFailure(($this->dbIsMaria ? 'MariaDB ' : 'MySQL ') . $this->dbVersion . ' non è supportato da ' . platform_of($c['platform'])['name'] . '.');
+                throw new StepFailure(t('{db} non è supportato da {p}.', ['db' => ($this->dbIsMaria ? 'MariaDB ' : 'MySQL ') . $this->dbVersion, 'p' => platform_of($c['platform'])['name']]));
             }
-            $this->log('⚠ ' . ($this->dbIsMaria ? 'MariaDB ' : 'MySQL ') . $this->dbVersion . ' non è nell\'elenco ufficiale: procedo su richiesta (solo sviluppo).');
+            $this->log('⚠ ' . t('{db} non è nell\'elenco ufficiale: procedo su richiesta (solo sviluppo).', ['db' => ($this->dbIsMaria ? 'MariaDB ' : 'MySQL ') . $this->dbVersion]));
         }
         $name = $c['db']['name'];
         $exists = (bool)$pdo->query('SELECT 1 FROM information_schema.schemata WHERE schema_name = ' . $pdo->quote($name))->fetchColumn();
         if (!$exists) {
             if (!$c['create_db']) {
-                throw new StepFailure("Il database \"$name\" non esiste.");
+                throw new StepFailure(t('Il database "{n}" non esiste.', ['n' => $name]));
             }
             try {
                 $pdo->exec('CREATE DATABASE `' . str_replace('`', '', $name) . '` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci');
             } catch (Throwable $e) {
-                throw new StepFailure("Impossibile creare il database \"$name\": " . $e->getMessage());
+                throw new StepFailure(t('Impossibile creare il database "{n}": {m}', ['n' => $name, 'm' => $e->getMessage()]));
             }
             $this->dbCreated = true;
-            $this->log("Database \"$name\" creato.");
+            $this->log(t('Database "{n}" creato.', ['n' => $name]));
         } else {
             $st = $pdo->prepare('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ?');
             $st->execute([$name]);
             $n = (int)$st->fetchColumn();
             if ($n > 0 && !$c['cleanup_db']) {
-                throw new StepFailure("Il database \"$name\" contiene già $n tabelle. Svuotalo o abilita l'opzione di pulizia.");
+                throw new StepFailure(t('Il database "{name}" contiene già {n} tabelle. Svuotalo o abilita l\'opzione di pulizia.', ['name' => $name, 'n' => $n]));
             }
-            $this->log($n > 0 ? "Il database contiene $n tabelle: verrà svuotato." : 'Database vuoto, ok.');
+            $this->log($n > 0 ? t('Il database contiene {n} tabelle: verrà svuotato.', ['n' => $n]) : t('Database vuoto, ok.'));
         }
 
         // Composer
         $composer = find_composer();
         if (!$composer) {
-            $this->log('Composer non trovato: scarico composer.phar…');
+            $this->log(t('Composer non trovato: scarico composer.phar…'));
             $r = http_get('https://getcomposer.org/download/latest-stable/composer.phar', 90);
             if (!$r['ok'] || $r['code'] !== 200 || strlen($r['body']) < 500000) {
-                throw new StepFailure('Impossibile scaricare composer.phar. Installa Composer sul server.');
+                throw new StepFailure(t('Impossibile scaricare composer.phar. Installa Composer sul server.'));
             }
             $composer = app_tmp() . '/composer.phar';
             file_put_contents($composer, $r['body']);
@@ -205,9 +208,9 @@ final class Worker
             ],
         ];
         $v = sh($this->composerBase['cmd'] . ' --version --no-ansi 2>&1');
-        $this->log($v !== '' ? $v : 'Composer: versione non rilevata');
+        $this->log($v !== '' ? $v : t('Composer: versione non rilevata'));
         if (!preg_match('/version (\d+)\./', $v, $m) || (int)$m[1] < 2) {
-            throw new StepFailure('Serve Composer 2.');
+            throw new StepFailure(t('Serve Composer 2.'));
         }
     }
 
@@ -217,20 +220,20 @@ final class Worker
         $pl = platform_of($c['platform']);
         $parent = dirname($c['target']);
         if (!is_dir($parent) && !@mkdir($parent, 0775, true)) {
-            throw new StepFailure("Impossibile creare $parent");
+            throw new StepFailure(t('Impossibile creare {d}', ['d' => $parent]));
         }
         $cmd = $this->composerBase['cmd'] . ' create-project --repository-url=' . escapeshellarg($pl['repo'])
             . ' ' . $pl['vendor'] . '/project-community-edition ' . escapeshellarg($c['target']) . ' ' . escapeshellarg($c['version'])
             . ' --no-interaction --no-progress --no-ansi --prefer-dist --no-audit --no-install';
         $code = $this->run($cmd, $parent, $this->composerBase['env']);
         if ($code !== 0 || !is_file($c['target'] . '/composer.json')) {
-            throw new StepFailure("composer create-project è fallito (codice $code)." . $this->diskHint());
+            throw new StepFailure(t('composer create-project è fallito (codice {c}).', ['c' => $code]) . $this->diskHint());
         }
         if ($c['save_auth'] && $c['credentials']) {
             $dest = $c['target'] . '/auth.json';
             copy($this->dir . '/composer-home/auth.json', $dest);
             chmod($dest, 0600);
-            $this->log('Credenziali salvate in auth.json del progetto (0600).');
+            $this->log(t('Credenziali salvate in auth.json del progetto (0600).'));
         }
     }
 
@@ -245,11 +248,11 @@ final class Worker
         $needle = '<argument name="supportedVersionPatterns" xsi:type="array">' . "\n";
         $pos = strpos($xml, $needle);
         if ($pos === false) {
-            throw new StepFailure('Impossibile aggiornare app/etc/di.xml: blocco supportedVersionPatterns non trovato.');
+            throw new StepFailure(t('Impossibile aggiornare app/etc/di.xml: blocco supportedVersionPatterns non trovato.'));
         }
         $pos += strlen($needle);
         file_put_contents($file, substr($xml, 0, $pos) . $item . substr($xml, $pos));
-        $this->log("app/etc/di.xml: aggiunta la versione $maj.$min tra quelle ammesse (Composer può sovrascrivere il file ai prossimi aggiornamenti).");
+        $this->log(t('app/etc/di.xml: aggiunta la versione {v} tra quelle ammesse (Composer può sovrascrivere il file ai prossimi aggiornamenti).', ['v' => "$maj.$min"]));
     }
 
     /**
@@ -262,7 +265,7 @@ final class Worker
         $file = $c['target'] . '/composer.json';
         $json = json_decode((string)file_get_contents($file), true);
         if (!is_array($json)) {
-            throw new StepFailure('composer.json del progetto non leggibile.');
+            throw new StepFailure(t('composer.json del progetto non leggibile.'));
         }
         foreach ($c['repositories'] as $r) {
             $json['repositories'][$r['id']] = ['type' => in_array($r['type'] ?? '', ['composer', 'vcs'], true) ? $r['type'] : 'composer', 'url' => $r['url']];
@@ -285,14 +288,14 @@ final class Worker
             $json['require'][$n] = $v;
         }
         if ($c['replace']) {
-            $this->log(count($c['replace']) . ' pacchetti esclusi tramite "replace".');
+            $this->log(t('{n} pacchetti esclusi tramite "replace".', ['n' => count($c['replace'])]));
         }
         if ($require) {
-            $this->log('Pacchetti aggiunti: ' . implode(', ', array_keys($require)));
+            $this->log(t('Pacchetti aggiunti: {l}', ['l' => implode(', ', array_keys($require))]));
         }
         file_put_contents($file, json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
 
-        $this->log('Nota: il blocco di Composer 2.9+ sulle versioni con advisory di sicurezza è disattivato (COMPOSER_NO_SECURITY_BLOCKING): le release vecchie di Magento dipendono da librerie con advisory noti, quindi installa le patch più recenti appena puoi.');
+        $this->log(t('Nota: il blocco di Composer 2.9+ sulle versioni con advisory di sicurezza è disattivato (COMPOSER_NO_SECURITY_BLOCKING): le release vecchie di Magento dipendono da librerie con advisory noti, quindi installa le patch più recenti appena puoi.'));
         $total = 0;
         $done = 0;
         $problems = [];
@@ -319,22 +322,22 @@ final class Worker
                 }
                 if (preg_match('/^\s*- Installing /', $line)) {
                     $done++;
-                    $this->progress('packages', $done, $total, 'pacchetti');
+                    $this->progress('packages', $done, $total, t('pacchetti'));
                 }
             });
         if ($code !== 0 || !is_file($c['target'] . '/bin/magento')) {
             $why = $problems ? "\n" . implode("\n", $problems) : '';
             if (($c['frontend']['id'] ?? '') === 'hyva') {
                 if (preg_match('#hyva-themes/magento2-hyva-checkout.*could not be found#i', $why)) {
-                    $why .= "\nIl repository Hyvä non offre Hyvä Checkout: la licenza di questo progetto probabilmente non lo include. Scegli Loki Checkout oppure usa le chiavi di una licenza con Hyvä Checkout.";
+                    $why .= "\n" . t('Il repository Hyvä non offre Hyvä Checkout: la licenza di questo progetto probabilmente non lo include. Scegli Loki Checkout oppure usa le chiavi di una licenza con Hyvä Checkout.');
                 } elseif (preg_match('/401|403|authentication|credentials|permissions|could not be found/i', $why)) {
-                    $why .= "\nControlla chiave e nome del progetto Hyvä (area licenze su hyva.io): sembra che il repository privato rifiuti l'accesso.";
+                    $why .= "\n" . t('Controlla chiave e nome del progetto Hyvä (area licenze su hyva.io): sembra che il repository privato rifiuti l\'accesso.');
                 }
             }
             if (preg_match('/security advisories/i', $why)) {
-                $why .= "\nUn pacchetto richiesto ha advisory di sicurezza e Composer lo ha escluso: scegli una versione più recente.";
+                $why .= "\n" . t('Un pacchetto richiesto ha advisory di sicurezza e Composer lo ha escluso: scegli una versione più recente.');
             }
-            throw new StepFailure("composer update è fallito (codice $code)." . $this->diskHint() . ($why !== '' ? $why : ' Controlla credenziali e disponibilità dei pacchetti.'));
+            throw new StepFailure(t('composer update è fallito (codice {c}).', ['c' => $code]) . $this->diskHint() . ($why !== '' ? $why : ' ' . t('Controlla credenziali e disponibilità dei pacchetti.')));
         }
         $this->checkDbAgainstProduct();
     }
@@ -349,7 +352,7 @@ final class Worker
         $patterns = db_patterns_from_di((string)@file_get_contents($this->cfg['target'] . '/app/etc/di.xml'));
         $name = ($this->dbIsMaria ? 'MariaDB ' : 'MySQL ') . $this->dbVersion;
         if ($patterns === null) {
-            $this->log("⚠ di.xml senza supportedVersionPatterns: non posso verificare che $name sia ammesso.");
+            $this->log('⚠ ' . t('di.xml senza supportedVersionPatterns: non posso verificare che {db} sia ammesso.', ['db' => $name]));
             // Se il controllo preliminare l'aveva rifiutato e l'utente ha scelto "Procedi comunque", l'override si applica lo stesso.
             $this->needsDbOverride = $this->cfg['allow_unsupported_db']
                 && !db_is_supported($this->dbIsMaria, $this->dbVersion, $this->cfg['platform'], $this->cfg['version']);
@@ -359,8 +362,8 @@ final class Worker
             return;
         }
         if (!$this->cfg['allow_unsupported_db']) {
-            throw new StepFailure("$name non è supportato da " . platform_of($this->cfg['platform'])['name'] . ' ' . $this->cfg['version']
-                . ' (Magento rifiuterebbe l\'installazione). Usa un database tra quelli ammessi da questa versione, oppure scegline una più recente.');
+            throw new StepFailure(t('{db} non è supportato da {p} {v} (Magento rifiuterebbe l\'installazione). Usa un database tra quelli ammessi da questa versione, oppure scegline una più recente.',
+                ['db' => $name, 'p' => platform_of($this->cfg['platform'])['name'], 'v' => $this->cfg['version']]));
         }
         $this->needsDbOverride = true;
     }
@@ -427,11 +430,11 @@ final class Worker
         $flagged = [];
         $code = $this->run($cmd, $c['target'], [], function (string $line) use (&$flagged) {
             if (preg_match('/\[Progress: (\d+) \/ (\d+)\]/', $line, $m)) {
-                $this->progress('install', (int)$m[1], (int)$m[2], 'operazioni');
+                $this->progress('install', (int)$m[1], (int)$m[2], t('operazioni'));
             }
             // setup:install esce con 0 anche se questi passaggi falliscono: li segnaliamo noi.
-            foreach (['Sample Data is installed with errors' => 'I dati di esempio sono stati installati con errori: controlla var/log/system.log e var/log/exception.log nel progetto.',
-                      'Indexing Error' => 'La ricerca ha rifiutato la creazione degli indici durante l\'installazione: controlla il motore di ricerca.'] as $needle => $msg) {
+            foreach (['Sample Data is installed with errors' => t('I dati di esempio sono stati installati con errori: controlla var/log/system.log e var/log/exception.log nel progetto.'),
+                      'Indexing Error' => t('La ricerca ha rifiutato la creazione degli indici durante l\'installazione: controlla il motore di ricerca.')] as $needle => $msg) {
                 if (str_contains($line, $needle) && empty($flagged[$needle])) {
                     $flagged[$needle] = true;
                     $this->warn($msg);
@@ -440,7 +443,7 @@ final class Worker
         }, $shown);
         @unlink($argsFile);
         if ($code !== 0 || !is_file($c['target'] . '/app/etc/env.php')) {
-            throw new StepFailure("setup:install è fallito (codice $code)." . $this->diskHint() . ' Controlla il log qui sopra.');
+            throw new StepFailure(t('setup:install è fallito (codice {c}).', ['c' => $code]) . $this->diskHint() . ' ' . t('Controlla il log qui sopra.'));
         }
     }
 
@@ -454,12 +457,12 @@ final class Worker
         foreach ($conf as $path => $value) {
             $this->mage('config:set ' . escapeshellarg((string)$path) . ' ' . escapeshellarg((string)$value), false);
         }
-        $this->detail('configure', 'Configurazione salvata');
+        $this->detail('configure', t('Configurazione salvata'));
 
         $this->frontend();
 
         if ($c['italian_tax']) {
-            $this->detail('configure', 'IVA italiana…');
+            $this->detail('configure', t('IVA italiana…'));
             $this->italianTax();
         }
 
@@ -480,7 +483,7 @@ final class Worker
             $this->mage('cron:install', false);
         }
 
-        $this->detail('configure', 'Modalità ' . $c['deploy_mode'] . '…');
+        $this->detail('configure', t('Modalità {m}…', ['m' => $c['deploy_mode']]));
         $this->mage($c['deploy_mode'] === 'production' ? 'deploy:mode:set production' : 'deploy:mode:set developer --skip-compilation');
     }
 
@@ -492,30 +495,32 @@ final class Worker
     {
         $fe = $this->cfg['frontend'] ?? ['id' => 'luma', 'checkout' => '', 'theme_path' => ''];
         if ($fe['id'] === 'hyva') {
-            $this->detail('configure', 'Tema Hyvä…');
+            $this->detail('configure', t('Tema Hyvä…'));
             $c = $this->cfg;
             $pdo = db_connect($c['db']['host'], $c['db']['user'], $c['db']['password'], $c['db']['name']);
             $st = $pdo->prepare('SELECT theme_id FROM `' . str_replace('`', '', $c['db']['prefix'] . 'theme') . '` WHERE theme_path = ? AND area = ? LIMIT 1');
             $st->execute([$fe['theme_path'], 'frontend']);
             $id = $st->fetchColumn();
             if ($id === false) {
-                throw new StepFailure('Tema ' . $fe['theme_path'] . ' non registrato: verifica che il pacchetto Hyvä sia stato installato.');
+                throw new StepFailure(t('Tema {t} non registrato: verifica che il pacchetto Hyvä sia stato installato.', ['t' => $fe['theme_path']]));
             }
             $this->mage('config:set design/theme/theme_id ' . (int)$id);
-            $this->log('Tema attivo: ' . $fe['theme_path'] . '. Luma e Blank non sono installati.');
+            $this->log(t('Tema attivo: {t}. Luma e Blank non sono installati.', ['t' => $fe['theme_path']]));
             if (!empty($fe['csp'])) {
-                $this->warn('Tema Hyvä in variante CSP: Alpine gira in modalità ridotta, quindi controlla i moduli di compatibilità e il checkout scelti (documentazione su docs.hyva.io, sezione CSP).');
+                $this->warn(t('Tema Hyvä in variante CSP: Alpine gira in modalità ridotta, quindi controlla i moduli di compatibilità e il checkout scelti (documentazione su docs.hyva.io, sezione CSP).'));
             }
         }
         if ($fe['checkout'] === 'loki') {
             if ($fe['id'] === 'hyva') {
                 $this->mage('hyva:config:generate', false);
             }
-            $this->warn('Loki Checkout: compila il CSS Tailwind ' . ($fe['id'] === 'hyva' ? 'del tema Hyvä' : 'del modulo Luma') . ' (documentazione su loki-checkout.com), altrimenti il checkout non è stilizzato.');
+            $this->warn($fe['id'] === 'hyva'
+                ? t('Loki Checkout: compila il CSS Tailwind del tema Hyvä (documentazione su loki-checkout.com), altrimenti il checkout non è stilizzato.')
+                : t('Loki Checkout: compila il CSS Tailwind del modulo Luma (documentazione su loki-checkout.com), altrimenti il checkout non è stilizzato.'));
         } elseif ($fe['checkout'] === 'hyva') {
             $this->mage('config:set dev/template/minify_html 0', false);
-            $this->log('Minificazione HTML disattivata, come richiede Hyvä Checkout.');
-            $this->warn('Hyvä Checkout: ricompila il CSS Tailwind del tema e attiva il checkout in Stores > Configuration > Hyvä Themes > Checkout.');
+            $this->log(t('Minificazione HTML disattivata, come richiede Hyvä Checkout.'));
+            $this->warn(t('Hyvä Checkout: ricompila il CSS Tailwind del tema e attiva il checkout in Stores > Configuration > Hyvä Themes > Checkout.'));
         }
     }
 
@@ -592,28 +597,29 @@ final class Worker
             $pdo->commit();
         } catch (Throwable $e) {
             $pdo->rollBack();
-            throw new StepFailure('Impossibile creare le regole IVA: ' . $e->getMessage());
+            throw new StepFailure(t('Impossibile creare le regole IVA: {m}', ['m' => $e->getMessage()]));
         }
         $this->mage('config:set tax/classes/shipping_tax_class ' . $shippingClass, false);
-        $this->log('Regole IVA create: 22% (Taxable Goods), 10% e 4% (classi "IVA ridotta"), prezzi IVA inclusa.');
+        $this->log(t('Regole IVA create: 22% (Taxable Goods), 10% e 4% (classi "IVA ridotta"), prezzi IVA inclusa.'));
     }
 
     private function finalize(): void
     {
         $c = $this->cfg;
-        $this->detail('finalize', 'Indicizzazione…');
+        $this->detail('finalize', t('Indicizzazione…'));
         if (!$this->mage('indexer:reindex', false)) {
-            $this->warn(($c['search']['host'] === '' ? 'Reindex non riuscito' : 'Reindex non riuscito: controlla che ' . ($c['search']['engine'] === 'opensearch' ? 'OpenSearch' : 'Elasticsearch') . ' accetti la creazione degli indici')
-                . '. Rilancialo con bin/magento indexer:reindex (dettagli nel log).');
+            $this->warn($c['search']['host'] === ''
+                ? t('Reindex non riuscito. Rilancialo con bin/magento indexer:reindex (dettagli nel log).')
+                : t('Reindex non riuscito: controlla che {e} accetti la creazione degli indici. Rilancialo con bin/magento indexer:reindex (dettagli nel log).', ['e' => $c['search']['engine'] === 'opensearch' ? 'OpenSearch' : 'Elasticsearch']));
         }
         $this->mage('cache:flush');
 
         $dur = (int)round(microtime(true) - $this->t0);
         $warnings = $this->warnings;
         if (!is_file($c['target'] . '/pub/index.php')) {
-            $warnings[] = 'pub/index.php non trovato: verifica la struttura del progetto.';
+            $warnings[] = t('pub/index.php non trovato: verifica la struttura del progetto.');
         }
-        $warnings[] = 'La document root del virtual host deve puntare a ' . $c['target'] . '/pub (Valet e i driver Magento lo fanno da soli).';
+        $warnings[] = t('La document root del virtual host deve puntare a {d}/pub (Valet e i driver Magento lo fanno da soli).', ['d' => $c['target']]);
         $this->status['result'] = [
             'storefront' => $c['base_url'],
             'admin' => $c['base_url'] . $c['backend_frontname'] . '/',
@@ -625,10 +631,10 @@ final class Worker
             'warnings' => $warnings,
         ];
         if (@file_put_contents(APP_ROOT . '/.installed', date('c') . "\n" . $c['target'] . "\n") === false) {
-            $this->warn('Non sono riuscito a creare il blocco ' . APP_ROOT . '/.installed: elimina a mano la cartella dell\'installer dal server, altrimenti resta riutilizzabile.');
+            $this->warn(t('Non sono riuscito a creare il blocco {f}: elimina a mano la cartella dell\'installer dal server, altrimenti resta riutilizzabile.', ['f' => APP_ROOT . '/.installed']));
             $this->status['result']['warnings'] = array_merge($this->status['result']['warnings'], [end($this->warnings)]);
         }
-        $this->log('✔ Installazione completata in ' . gmdate('i\m s\s', $dur) . '.');
+        $this->log('✔ ' . t('Installazione completata in {d}.', ['d' => gmdate('i\m s\s', $dur)]));
     }
 
     /**
@@ -649,11 +655,11 @@ final class Worker
             $to = "$t/pub/media/$d";
             if (!is_dir($to)) {
                 $this->copyTree("$media/$d", $to);
-                $this->log("Immagini di esempio copiate in $to");
+                $this->log(t('Immagini di esempio copiate in {d}', ['d' => $to]));
             } elseif (is_dir("$to/$d")) {
                 $this->copyTree("$media/$d", $to);
                 rrmdir("$to/$d");
-                $this->log("Immagini di esempio riportate al loro posto in $to (cartella annidata rimossa)");
+                $this->log(t('Immagini di esempio riportate al loro posto in {d} (cartella annidata rimossa)', ['d' => $to]));
             }
         }
     }
@@ -677,9 +683,9 @@ final class Worker
         $code = $this->run(escapeshellarg($this->php) . ' -d memory_limit=-1 bin/magento ' . $args . ' --no-interaction', $this->cfg['target'], $this->phpIniEnv());
         if ($code !== 0) {
             if ($fatal) {
-                throw new StepFailure("bin/magento $args è fallito (codice $code).");
+                throw new StepFailure(t('bin/magento {a} è fallito (codice {c}).', ['a' => $args, 'c' => $code]));
             }
-            $this->log("⚠ bin/magento $args ha restituito $code, continuo.");
+            $this->log('⚠ ' . t('bin/magento {a} ha restituito {c}, continuo.', ['a' => $args, 'c' => $code]));
         }
         return $code === 0;
     }
@@ -770,7 +776,7 @@ final class Worker
         fseek($fh, -min(20000, (int)@filesize($this->dir . '/log.txt')), SEEK_END);
         $tail = (string)fread($fh, 20000);
         fclose($fh);
-        return stripos($tail, 'No space left on device') !== false ? ' Spazio su disco esaurito: libera spazio nella cartella di destinazione e riprova.' : '';
+        return stripos($tail, 'No space left on device') !== false ? ' ' . t('Spazio su disco esaurito: libera spazio nella cartella di destinazione e riprova.') : '';
     }
 
     private function log(string $line): void
@@ -802,7 +808,7 @@ final class Worker
             return;
         }
         $t = rtrim((string)$this->cfg['target'], '/');
-        $msg = 'Pulizia:';
+        $parts = [];
         if ($t !== '' && $t !== '/' && $t !== home_dir() && is_dir($t)) {
             foreach (array_diff(scandir($t) ?: [], ['.', '..']) as $f) {
                 rrmdir($t . '/' . $f);
@@ -810,19 +816,19 @@ final class Worker
             if ($this->targetCreated) {
                 @rmdir($t);
             }
-            $msg .= ' rimossi i file scaricati' . ($this->targetCreated ? ' e la cartella' : '');
+            $parts[] = $this->targetCreated ? t('rimossi i file scaricati e la cartella') : t('rimossi i file scaricati');
         }
         if ($this->dbCreated) {
             try {
                 $pdo = db_connect($this->cfg['db']['host'], $this->cfg['db']['user'], $this->cfg['db']['password']);
                 $pdo->exec('DROP DATABASE `' . str_replace('`', '', $this->cfg['db']['name']) . '`');
-                $msg .= ($msg === 'Pulizia:' ? '' : ' e') . ' rimosso il database creato';
+                $parts[] = t('rimosso il database creato');
             } catch (Throwable $e) {
                 // il database resta: nessun danno, lo si riusa o lo si elimina a mano
             }
         }
-        if ($msg !== 'Pulizia:') {
-            $this->log($msg . '.');
+        if ($parts) {
+            $this->log(t('Pulizia: {p}.', ['p' => implode(t(' e '), $parts)]));
             $this->status['cleaned'] = true;
         }
     }
@@ -889,7 +895,7 @@ final class Worker
         $this->log('$ ' . preg_replace('/\s+/', ' ', mb_strimwidth($display ?? $cmd, 0, 260, '…')));
         $p = proc_open('exec ' . $cmd, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $cwd, shell_env($env));
         if (!is_resource($p)) {
-            throw new StepFailure('Impossibile eseguire il comando.');
+            throw new StepFailure(t('Impossibile eseguire il comando.'));
         }
         foreach ([1, 2] as $i) {
             stream_set_blocking($pipes[$i], false);
@@ -959,7 +965,7 @@ final class Worker
                 sleep(1);
                 $this->killTree($pid, 9);
                 proc_close($p);
-                throw new StepFailure('Composer non dà output né scarica nulla da ' . intdiv($idleLimit, 60) . ' minuti: probabile download bloccato o rete ferma. Riprova l\'installazione.');
+                throw new StepFailure(t('Composer non dà output né scarica nulla da {m} minuti: probabile download bloccato o rete ferma. Riprova l\'installazione.', ['m' => intdiv($idleLimit, 60)]));
             }
             $st = proc_get_status($p);
             if (!$st['running']) {
@@ -981,7 +987,7 @@ final class Worker
 
 $id = $argv[1] ?? '';
 if (!valid_job_id($id) || !is_file(job_dir($id) . '/job.json')) {
-    fwrite(STDERR, "Job non valido\n");
+    fwrite(STDERR, t("Job non valido") . "\n");
     exit(2);
 }
 exit((new Worker($id))->main());
