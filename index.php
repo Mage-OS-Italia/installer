@@ -6,6 +6,7 @@ require __DIR__ . '/lib/catalog.php';
 require __DIR__ . '/lib/requirements.php';
 require __DIR__ . '/lib/jobs.php';
 require __DIR__ . '/lib/demo.php';
+require __DIR__ . '/lib/policy.php';
 
 // Errori dell'ambiente (cartella temporanea non sicura, permessi): un messaggio leggibile invece di una pagina bianca.
 set_exception_handler(function (Throwable $e): void {
@@ -27,10 +28,12 @@ if (empty($_SESSION['csrf'])) {
 
 header('X-Frame-Options: DENY');
 header('X-Content-Type-Options: nosniff');
-header('Referrer-Policy: no-referrer');
+header('Referrer-Policy: strict-origin-when-cross-origin');
 // Script solo da questo sito o con nonce; gli stili inline restano perché l'interfaccia li usa negli attributi style.
 $nonce = base64_encode(random_bytes(16));
-header("Content-Security-Policy: default-src 'none'; script-src 'self' 'nonce-$nonce'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
+// Demo: Google Analytics 4 (caricato solo dopo il consenso, vedi assets/consent.js).
+$ga = 'https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com';
+header("Content-Security-Policy: default-src 'none'; script-src 'self' 'nonce-$nonce' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: $ga; connect-src 'self' $ga; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
 
 $authorized = true; // nessun token: l'accesso è libero
 $locked = false; // demo: l'installer non si blocca mai
@@ -107,9 +110,13 @@ if ($action !== '') {
 }
 
 // ---- Pagina
+$asset = fn(string $f): string => 'assets/' . $f . '?v=' . filemtime(__DIR__ . '/assets/' . $f);
+$policy = (string)($_GET['p'] ?? '');
+if ($policy === 'privacy' || $policy === 'cookie') {
+    render_policy($policy, $nonce, $asset);
+}
 header('Content-Type: text/html; charset=utf-8');
 header('Cache-Control: no-store');
-$asset = fn(string $f): string => 'assets/' . $f . '?v=' . filemtime(__DIR__ . '/assets/' . $f);
 ?>
 <!doctype html>
 <html lang="<?= h(current_lang()) ?>">
@@ -149,6 +156,7 @@ document.getElementById('remove-btn').onclick = async () => {
 <div id="app" class="app" data-csrf="<?= h($_SESSION['csrf']) ?>">
   <div class="boot"><div class="spinner"></div><p>Caricamento…</p></div>
 </div>
+<script src="<?= h($asset('consent.js')) ?>" nonce="<?= h($nonce) ?>" data-ga="<?= h(DEMO_GA4_ID) ?>"></script>
 <script src="<?= h($asset('lang-en.js')) ?>" nonce="<?= h($nonce) ?>"></script>
 <script src="<?= h($asset('app.js')) ?>" nonce="<?= h($nonce) ?>"></script>
 <?php endif; ?>

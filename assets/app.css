@@ -251,3 +251,28 @@ body{padding-top:46px}
 .lang-switch .lang.on{color:var(--text);border-color:var(--orange);background:rgba(255,255,255,.06)}
 .demo-banner a{color:#fff;font-weight:700;text-decoration:underline;margin-left:6px;white-space:nowrap}
 .demo-banner a:hover{text-decoration:none}
+
+/* Demo: consenso cookie, link legali, pagine privacy/cookie */
+.cookie-banner{position:fixed;left:16px;right:16px;bottom:16px;z-index:1100;max-width:760px;margin:0 auto;display:flex;align-items:center;gap:16px;padding:16px 18px;border-radius:var(--radius);border:1px solid var(--line);background:rgba(20,22,61,.97);color:var(--text);box-shadow:0 12px 40px rgba(0,0,0,.5);font-size:14px}
+.cookie-banner p{margin:0;flex:1}
+.cookie-actions{display:flex;gap:8px;flex:none}
+.cookie-actions .btn{padding:9px 16px;font-size:14px;min-width:96px}
+@media (max-width:640px){.cookie-banner{flex-direction:column;align-items:stretch}.cookie-actions .btn{flex:1}}
+.legal{display:flex;flex-wrap:wrap;gap:4px 14px;padding:0 4px;font-size:12.5px}
+.legal a{color:var(--muted)}
+.legal a:hover{color:var(--text)}
+body.policy-page{padding-top:0}
+.policy{position:relative;z-index:1;max-width:860px;margin:0 auto;padding:32px 16px 64px}
+.policy-nav{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:18px;font-size:14px}
+.policy-nav a[aria-current]{color:var(--text);font-weight:600}
+.policy-card{padding:32px}
+.policy-card h1{margin:0 0 4px;font-size:28px}
+.policy-card h2{margin:28px 0 8px;font-size:18px}
+.policy-card ul{padding-left:20px}
+.policy-card li{margin:6px 0}
+.policy-table{overflow-x:auto;margin:12px 0}
+.policy-table table{width:100%;border-collapse:collapse;font-size:13.5px}
+.policy-table th,.policy-table td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid var(--line)}
+.policy-table th{color:var(--muted);font-weight:600}
+@media (max-width:640px){.policy-card{padding:20px}}
+.policy-table code{white-space:nowrap;word-break:normal}

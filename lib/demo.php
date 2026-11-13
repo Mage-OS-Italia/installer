@@ -7,6 +7,9 @@ declare(strict_types=1);
  * nessun job, nessun processo lanciato, nessun file scritto (a parte la sessione PHP).
  */
 
+/** Measurement ID di Google Analytics 4: vuoto = GA spento. Si carica solo dopo il consenso (assets/consent.js). */
+const DEMO_GA4_ID = 'G-QEN3D7KEVZ';
+
 /** Cartella e dati mostrati nel wizard: tutti di fantasia. */
 const DEMO_SERVER = [
     'php_web' => '8.3.14', 'sapi' => 'fpm-fcgi', 'php_cli' => '8.3.14', 'os' => 'Linux 6.8.0',

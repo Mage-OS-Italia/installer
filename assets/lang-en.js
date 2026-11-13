@@ -243,5 +243,6 @@ window.I18N_EN = {
  "Simulazione completata": "Simulation complete",
  "Grazie per aver provato la demo!": "Thanks for trying the demo!",
  "In questo ambiente l'installazione non viene completata: non è stato creato nessun file, database o negozio.": "In this environment the installation is not completed: no file, database or store was created.",
- "↻ Riprova la demo": "↻ Try the demo again"
+ "↻ Riprova la demo": "↻ Try the demo again",
+ "Preferenze cookie": "Cookie preferences"
 };

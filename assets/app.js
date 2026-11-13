@@ -193,7 +193,7 @@
   const canGo = (i) => !S.job && i !== S.step && i <= (S.maxStep || 0) && i < 4;
 
   // ----------------------------------------------------------------- layout
-  const demoBanner = () => `<div class="demo-banner"><b>Demo</b> · ${t("Stai provando l'installer: i dati sono di esempio, nessun controllo è reale e alla fine non viene installato nulla.")} <a href="https://github.com/Mage-OS-Italia/installer/archive/refs/heads/main.zip">${t("Scarica l'installer")}</a></div>`;
+  const demoBanner = () => `<div class="demo-banner"><b>Demo</b> · ${t("Stai provando l'installer: i dati sono di esempio, nessun controllo è reale e alla fine non viene installato nulla.")} <a href="https://github.com/Mage-OS-Italia/installer/archive/refs/heads/main.zip" data-act="download">${t("Scarica l'installer")}</a></div>`;
 
   const sideHtml = () => `
         <button type="button" class="brand" data-act="switch-platform" title="${t('Passa a {p}', { p: esc(otherPlatform().name) })}"><img src="assets/logo.svg" alt=""><div><h1>${S.f.platform === 'mageos' ? 'Mage-OS' : 'Magento'}<br>Installer</h1><small>v${esc(S.boot.app.version)} · ${t('passa a {p}', { p: esc(otherPlatform().name) })} ⇄</small></div></button>
@@ -202,6 +202,7 @@
           <li class="${i === S.step ? 'active' : i < S.step ? 'done' : ''} ${canGo(i) ? 'nav' : ''}" ${canGo(i) ? `data-act="goto" data-step="${i}" role="button" tabindex="0"` : ''}><span class="num">${i < S.step ? '✓' : i + 1}</span><span>${esc(label)}</span></li>`).join('')}
         </ol>
         <div class="info card" id="side-info"></div>
+        <nav class="legal"><a href="?p=privacy">Privacy policy</a><a href="?p=cookie">Cookie policy</a><a href="#" data-act="cookie-prefs">${t('Preferenze cookie')}</a></nav>
       `;
 
   function render() {
@@ -907,6 +908,8 @@
     switch (act.dataset.act) {
       case 'recheck': S.req = null; runRequirements(); break;
       case 'restart-demo': saveJob(null); location.reload(); break;
+      case 'download': window.demoConsent?.track('download_installer', { link_url: act.href, interface_language: lang }); return;
+      case 'cookie-prefs': e.preventDefault(); window.demoConsent?.open(); break;
       case 'test-db': testDb(); break;
       case 'test-search': S.touched.search_engine = true; testSearch(false); break;
       case 'gen-pw': { S.f.admin_password = genPassword(); const i = $('[data-k=admin_password]'); i.value = S.f.admin_password; setPwVisible(i, true); break; }
